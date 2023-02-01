@@ -27,7 +27,7 @@ pub fn get_info() -> Option<GpuData> {
 
         let usage: Option<u64> = match splited2[1] {
             "[N/A]" => None,
-            _ => Some(splited2[1].to_string().parse::<u64>().unwrap())
+            _ => Some(splited2[1].to_string().parse::<u64>().unwrap()),
         };
 
         let result = Some(GpuData {

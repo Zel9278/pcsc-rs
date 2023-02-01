@@ -80,7 +80,8 @@ impl SystemStatus {
             .or(sys.kernel_version())
             .expect("Failed to get os version");
 
-        let hostname = env::var("HOSTNAME").unwrap_or_else(|_| sys.host_name().expect("Failed to get hostname"));
+        let hostname = env::var("HOSTNAME")
+            .unwrap_or_else(|_| sys.host_name().expect("Failed to get hostname"));
 
         cfg_if! {
             if #[cfg(target_os = "windows")] {
