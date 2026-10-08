@@ -3,7 +3,8 @@
 PC の状態を取得し、[PC Status](https://pc-stats.eov2.com/)に送信、表示するツールです。
 
 ![Preview - Overview](docs/images/overview.png)
-![Preview - Focus](docs/images/focus.png)
+| ![Preview - Focus to DMS-Arch](docs/images/focus-dms.png) | ![Preview - Focus to ZPC-Fedora](docs/images/focus-zpc.png) |
+|---|---|
 
 ## 注意
 
