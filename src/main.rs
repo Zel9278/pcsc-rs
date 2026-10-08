@@ -1,24 +1,23 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use dotenvy::dotenv;
-use std::{env, path::Path, process};
-use sysinfo::IS_SUPPORTED_SYSTEM;
+use std::{path::Path, process};
 
 fn main() {
-    let rs = Path::new(".env").exists();
-    if rs {
-        dotenv().expect(".env file not found");
+    if Path::new(".env").exists()
+        && let Err(e) = dotenvy::dotenv()
+    {
+        eprintln!("Failed to read .env: {e}");
     }
 
-    if !IS_SUPPORTED_SYSTEM {
+    if !sysinfo::IS_SUPPORTED_SYSTEM {
         println!("This OS isn't supported (yet?).");
         process::exit(95);
     }
 
-    if !env::var("PASS").is_ok() {
+    let Some(config) = pcsc_rs::Config::from_env() else {
         println!("The environment variable Password (PASS) is not specified.");
         process::exit(95);
-    }
+    };
 
-    pcsc_rs::start();
+    pcsc_rs::start(&config);
 }

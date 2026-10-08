@@ -3,10 +3,11 @@ use std::io;
 #[cfg(windows)]
 use winres::WindowsResource;
 
+#[cfg_attr(not(windows), allow(clippy::unnecessary_wraps))]
 fn main() -> io::Result<()> {
     match get_git_describe_result() {
         Ok(result) => println!("cargo::rustc-env=GIT_DESCRIBE={result}"),
-        Err(e) => println!("cargo::warning={}", e),
+        Err(e) => println!("cargo::warning={e}"),
     }
 
     #[cfg(windows)]
