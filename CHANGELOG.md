@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.1](https://github.com/Zel9278/pcsc-rs/compare/v2.0.0...v2.0.1) (2026-10-08)
+
+
+### Bug Fixes
+
+* leave read-only mounts out of the storages ([#658](https://github.com/Zel9278/pcsc-rs/issues/658)) ([c4a598a](https://github.com/Zel9278/pcsc-rs/commit/c4a598a0271d9632ab1366717402a3d80d9d68b7))
+
 ## [2.0.0](https://github.com/Zel9278/pcsc-rs/compare/v1.4.22...v2.0.0) (2026-10-08)
 
 
