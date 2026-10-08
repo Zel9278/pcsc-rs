@@ -1,6 +1,9 @@
 use std::{path::Path, process, thread, time::Duration};
 
-use self_update::{cargo_crate_version, update::UpdateConfig};
+use self_update::{
+    cargo_crate_version,
+    update::{UpdateConfig, UpdateStrategy},
+};
 
 use crate::config::OnUpdate;
 
@@ -49,6 +52,8 @@ fn update() -> Result<Option<std::path::PathBuf>, Box<dyn std::error::Error>> {
         .show_download_progress(false)
         .current_version(cargo_crate_version!())
         .no_confirm(true)
+        // Jump across major versions too (v1 -> v2): the server keeps accepting older clients.
+        .update_strategy(UpdateStrategy::Latest)
         .build()?;
 
     let bin = updater.bin_install_path().to_path_buf();

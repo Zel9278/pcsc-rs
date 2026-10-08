@@ -1,5 +1,6 @@
-//! The status sent to the PC Status server. Field names and shapes are part of
-//! the wire format the server (and its dashboard) expect; keep them as they are.
+//! The status sent to the PC Status server. The shape follows
+//! pc-status-monorepo-rs (`StatusData`): `gpus` is a list and `uptime` is in
+//! seconds. Keep it in step with the server.
 
 use cfg_if::cfg_if;
 use serde::Serialize;
@@ -48,16 +49,16 @@ pub struct GpuMemory {
     pub(crate) total: u64,
 }
 
-#[derive(Serialize, Clone, PartialEq, Eq, Debug)]
+#[derive(Serialize, Clone, PartialEq, Debug)]
 pub struct GpuData {
     pub(crate) name: String,
-    /// `None` when the driver reports `[N/A]`.
-    pub(crate) usage: Option<u64>,
+    pub(crate) usage: f64,
     pub(crate) memory: GpuMemory,
 }
 
 #[derive(Serialize, Clone, Debug)]
 pub struct SystemStatus {
+    pub(crate) dev: bool,
     pub(crate) _os: String,
     pub(crate) hostname: String,
     pub(crate) version: String,
@@ -65,18 +66,22 @@ pub struct SystemStatus {
     pub(crate) ram: MemoryData,
     pub(crate) swap: MemoryData,
     pub(crate) storages: Vec<StorageData>,
-    #[serde(rename = "loadavg")]
-    pub(crate) load_average: Option<[f64; 3]>,
-    pub(crate) uptime: String,
-    pub(crate) gpu: Option<GpuData>,
+    /// Seconds since boot.
+    pub(crate) uptime: u64,
+    /// Zeros on Windows, which has no load average.
+    pub(crate) loadavg: [f64; 3],
+    pub(crate) gpus: Vec<GpuData>,
+    /// Kept by the server; sent for compatibility with the monorepo server.
+    pub(crate) index: u32,
+    /// Kept by the server; sent for compatibility with the monorepo server.
+    pub(crate) histories: [(); 0],
 }
 
-/// The first status (`hi`) carries the password.
-#[derive(Serialize)]
-pub struct StatusWithPass<'a> {
-    #[serde(flatten)]
-    pub(crate) status: &'a SystemStatus,
-    pub(crate) pass: &'a str,
+/// Identity of this client, fixed for its lifetime.
+#[derive(Clone, Debug, Default)]
+pub struct Identity {
+    pub hostname: Option<String>,
+    pub dev: bool,
 }
 
 /// `git describe` of the build, or the crate version when built outside a repository.
@@ -86,24 +91,25 @@ const VERSION: &str = match option_env!("GIT_DESCRIBE") {
 };
 
 impl SystemStatus {
-    pub fn collect(sampler: &Sampler, hostname: Option<&str>) -> Self {
+    pub fn collect(sampler: &Sampler, identity: &Identity) -> Self {
         let Sampler { system, disks } = sampler;
 
         let os_name = System::name().unwrap_or_else(|| "Unknown OS".into());
         let os_version = System::os_version()
             .or_else(System::kernel_version)
             .unwrap_or_default();
-        let hostname = hostname
-            .map(str::to_owned)
+        let hostname = identity
+            .hostname
+            .clone()
             .or_else(System::host_name)
             .unwrap_or_else(|| "unknown".into());
 
         cfg_if! {
             if #[cfg(target_os = "windows")] {
-                let load_average = None;
+                let loadavg = [0.0; 3];
             } else {
                 let load = System::load_average();
-                let load_average = Some([load.one, load.five, load.fifteen]);
+                let loadavg = [load.one, load.five, load.fifteen];
             }
         }
 
@@ -131,6 +137,7 @@ impl SystemStatus {
         }
 
         Self {
+            dev: identity.dev,
             _os: format!("{os_name} {os_version}").trim_end().to_owned(),
             hostname,
             version: format!("Rust client {VERSION}"),
@@ -144,68 +151,53 @@ impl SystemStatus {
                 total: system.total_swap(),
             },
             storages,
-            load_average,
-            uptime: format_uptime(System::uptime()),
-            gpu: gpu::get_info(),
+            uptime: System::uptime(),
+            loadavg,
+            gpus: gpu::get_info(),
+            index: 0,
+            histories: [],
         }
-    }
-
-    pub fn with_pass<'a>(&'a self, pass: &'a str) -> StatusWithPass<'a> {
-        StatusWithPass { status: self, pass }
     }
 }
 
-/// The server and dashboard read this exact shape.
-fn format_uptime(seconds: u64) -> String {
-    let days = seconds / 86400;
-    let hours = seconds % 86400 / 3600;
-    let minutes = seconds % 3600 / 60;
-    let seconds = seconds % 60;
-    format!("{days} days {hours} hours {minutes} minutes {seconds} seconds")
+#[cfg(test)]
+pub(crate) fn sample() -> SystemStatus {
+    SystemStatus {
+        dev: false,
+        _os: "Arch Linux rolling".into(),
+        hostname: "host".into(),
+        version: "Rust client test".into(),
+        cpu: CpuData {
+            model: "cpu".into(),
+            cpus: vec![CoreData { usage: 12.5 }],
+        },
+        ram: MemoryData { free: 1, total: 2 },
+        swap: MemoryData { free: 0, total: 0 },
+        storages: vec![StorageData {
+            name: "/dev/sda1".into(),
+            free: 3,
+            total: 4,
+        }],
+        uptime: 61,
+        loadavg: [0.5, 0.25, 0.125],
+        gpus: vec![GpuData {
+            name: "gpu".into(),
+            usage: 7.0,
+            memory: GpuMemory { free: 5, total: 6 },
+        }],
+        index: 0,
+        histories: [],
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    #[test]
-    fn uptime_format() {
-        assert_eq!(format_uptime(0), "0 days 0 hours 0 minutes 0 seconds");
-        assert_eq!(
-            format_uptime(5 * 86400 + 27 * 60 + 2),
-            "5 days 0 hours 27 minutes 2 seconds"
-        );
-    }
-
     #[test]
     fn wire_format() {
-        let status = SystemStatus {
-            _os: "Arch Linux rolling".into(),
-            hostname: "host".into(),
-            version: "Rust client test".into(),
-            cpu: CpuData {
-                model: "cpu".into(),
-                cpus: vec![CoreData { usage: 12.5 }],
-            },
-            ram: MemoryData { free: 1, total: 2 },
-            swap: MemoryData { free: 0, total: 0 },
-            storages: vec![StorageData {
-                name: "/dev/sda1".into(),
-                free: 3,
-                total: 4,
-            }],
-            load_average: Some([0.5, 0.25, 0.125]),
-            uptime: "0 days 0 hours 0 minutes 1 seconds".into(),
-            gpu: Some(GpuData {
-                name: "gpu".into(),
-                usage: None,
-                memory: GpuMemory { free: 5, total: 6 },
-            }),
-        };
-        let json = serde_json::to_value(status.with_pass("secret")).unwrap();
         assert_eq!(
-            json,
+            serde_json::to_value(super::sample()).unwrap(),
             serde_json::json!({
+                "dev": false,
                 "_os": "Arch Linux rolling",
                 "hostname": "host",
                 "version": "Rust client test",
@@ -213,10 +205,11 @@ mod tests {
                 "ram": { "free": 1, "total": 2 },
                 "swap": { "free": 0, "total": 0 },
                 "storages": [{ "name": "/dev/sda1", "free": 3, "total": 4 }],
+                "uptime": 61,
                 "loadavg": [0.5, 0.25, 0.125],
-                "uptime": "0 days 0 hours 0 minutes 1 seconds",
-                "gpu": { "name": "gpu", "usage": null, "memory": { "free": 5, "total": 6 } },
-                "pass": "secret",
+                "gpus": [{ "name": "gpu", "usage": 7.0, "memory": { "free": 5, "total": 6 } }],
+                "index": 0,
+                "histories": [],
             })
         );
     }

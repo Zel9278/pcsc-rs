@@ -25,14 +25,14 @@ HOSTNAME=ホスト名として表示させたい文字列
 3. CPU 名、CPU 使用率 (全体, コアごと) (e.g. `AMD Ryzen 5 3500 6-Core Processor`)
 4. 物理メモリ使用量、スワップメモリ使用量
 5. マウントされているストレージ使用量 (実行されている root を参照)
-6. GPU 使用率、GPU メモリ使用量 (NVIDIA GPU のみ)
+6. GPU 使用率、GPU メモリ使用量 (NVIDIA GPU のみ、複数枚対応)
 7. 連続起動時間
 8. Load Average (Linux のみ)
 
 ## 対応環境
 
 最近の Windows (Server 含む), macOS, Linux であれば動作すると思います。\
-もし動作しない場合は [Issues](https://github.com/eoeo-org/pcsc-rs/issues) から報告をお願いします。
+もし動作しない場合は [Issues](https://github.com/Zel9278/pcsc-rs/issues) から報告をお願いします。
 
 ## 使い方
 
@@ -83,7 +83,12 @@ sudo systemctl enable --now pcsc-rs
 
 - `PCSC_URI`
 
-  接続先のサーバー (デフォルト: `https://pcss.eov2.com`)
+  接続先のサーバー (デフォルト: `wss://pcss.eov2.com/server`)\
+  v2 から WebSocket で接続します。v1 と同じ `https://pcss.eov2.com` のような形でも、`wss://…/server` に読み替えて接続します。
+
+- `DEV_MODE`
+
+  `true` にすると同じホスト名で複数台つなげられます。PC Status には `[DEV] ホスト名_番号` と表示されます。
 
 - `HOSTNAME`
 
