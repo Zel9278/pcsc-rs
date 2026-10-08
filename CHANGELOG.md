@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.0](https://github.com/Zel9278/pcsc-rs/compare/v2.1.0...v2.2.0) (2026-10-08)
+
+
+### Features
+
+* install on macOS with launchd, and on Nix with a flake ([#664](https://github.com/Zel9278/pcsc-rs/issues/664)) ([6a829fe](https://github.com/Zel9278/pcsc-rs/commit/6a829febd077847351d9c2f54d88699330df0f74))
+
 ## [2.1.0](https://github.com/Zel9278/pcsc-rs/compare/v2.0.1...v2.1.0) (2026-10-08)
 
 
