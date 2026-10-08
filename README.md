@@ -36,6 +36,10 @@ HOSTNAME=ホスト名として表示させたい文字列
 
 ## 使い方
 
+Linux は[下のコマンド](#linux)で入れられます。
+
+### Windows, macOS
+
 1. [リリースページ](https://github.com/Zel9278/pcsc-rs/releases)から使用する環境に合った最新のリリースをダウンロードしてください。
 2. 適当なフォルダに保存し、同じフォルダに `.env` ファイルを作成して以下の Key を追加してください。
 
@@ -44,13 +48,34 @@ PASS=npU7pmkkYfuUdKfqzm2BtDfBPEe4pizrXyPVj8Fby3KaUtehNu3ToDtM8uEdGBr3AS9LRUkZixt
 ```
 
 3. ダウンロードしたリリースを実行してください。\
-   macOS, Linux 環境では予め `$ chmod +x <ファイル名>` で実行権限を付与する必要があります。
+   macOS では予め `$ chmod +x <ファイル名>` で実行権限を付与する必要があります。
 4. [PC Status](https://pc-stats.eov2.com/)にアクセスし、自分の PC が表示されていれば完了です。
 
-必要に応じて `pcsc-rs.exe` のショートカットを `shell:startup` に追加すれば、PC と同時に起動するようになります。
+Windows では、必要に応じて `pcsc-rs.exe` のショートカットを `shell:startup` に追加すれば、PC と同時に起動するようになります。
 
-Linuxの場合、`sudo install -D --no-target-directory pcsc-rs-* /usr/local/bin/pcsc-rs`を実行し、Systemdに登録します。\
+### Linux
+
+下のコマンドで最新のリリースを入れ、systemd に登録して起動します（[install.sh](install.sh)）。以後の更新は pcsc-rs が自分で行います。
+
+```sh
+# システム全体（/usr/local/bin、systemd のサービス）
+curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | sudo PASS=npU7pmkkYfuUdKfqzm2BtDfBPEe4pizrXyPVj8Fby3KaUtehNu3ToDtM8uEdGBr3AS9LRUkZixtZxuKTvsL2e4BVrfzWWG7RqqVThLWsVLHLaJJ8ekeGuHtLBkfZpBtv sh
+
+# このユーザーだけ（~/.local/bin、systemd --user のサービス。sudo 不要）
+curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | PASS=npU7pmkkYfuUdKfqzm2BtDfBPEe4pizrXyPVj8Fby3KaUtehNu3ToDtM8uEdGBr3AS9LRUkZixtZxuKTvsL2e4BVrfzWWG7RqqVThLWsVLHLaJJ8ekeGuHtLBkfZpBtv sh
+```
+
+- 状態は `systemctl status pcsc-rs`（ユーザー版は `systemctl --user status pcsc-rs`）、ログは `journalctl -u pcsc-rs`（ユーザー版は `journalctl --user -u pcsc-rs`）で見られます。
+- ユーザー版をログアウト中も動かすには `loginctl enable-linger` が必要です。
+- もう一度実行すると、入っているサービスの `PASS` のまま最新版に入れ直します（`PASS=` は省略可）。
+- `HOSTNAME` などの[設定](#その他の設定)は、サービスに `Environment="HOSTNAME=…"` を足してください（`sudo systemctl edit pcsc-rs`、ユーザー版は `systemctl --user edit pcsc-rs`）。
+
+<details>
+<summary>手動で入れる場合</summary>
+
+`sudo install -D --no-target-directory pcsc-rs-* /usr/local/bin/pcsc-rs` を実行し、Systemd に登録します。\
 `sudo --preserve-env=EDITOR systemctl edit --force --full pcsc-rs.service`
+
 ```
 [Unit]
 Description=PCStatus Client
@@ -65,9 +90,12 @@ Restart=always
 [Install]
 WantedBy=network-online.target
 ```
+
 ```sh
 sudo systemctl enable --now pcsc-rs
 ```
+
+</details>
 
 ## その他の設定
 
