@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.1.0](https://github.com/Zel9278/pcsc-rs/compare/v2.0.1...v2.1.0) (2026-10-08)
+
+
+### Features
+
+* send disk activity (IO wait, read/write speed, busy time) ([#663](https://github.com/Zel9278/pcsc-rs/issues/663)) ([b0ad7b9](https://github.com/Zel9278/pcsc-rs/commit/b0ad7b96df2f43aaa2f61ea9855171fb18e4ccc8))
+
+
+### Bug Fixes
+
+* **install:** keep HOSTNAME and other settings when reinstalling ([#661](https://github.com/Zel9278/pcsc-rs/issues/661)) ([a046115](https://github.com/Zel9278/pcsc-rs/commit/a046115c8ce9ce4bd78f193ebd13ba606e8378c4))
+
 ## [2.0.1](https://github.com/Zel9278/pcsc-rs/compare/v2.0.0...v2.0.1) (2026-10-08)
 
 
