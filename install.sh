@@ -4,7 +4,7 @@
 #       … システム全体（/usr/local/bin、system のユニット）
 #   curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | PASS=<PASS> sh
 #       … このユーザーだけ（~/.local/bin、systemd --user のユニット）
-# 2回目以降は PASS を省くと、既に入っているユニットの PASS をそのまま使う
+# 2回目以降は PASS を省くと、既に入っているユニットの PASS をそのまま使う。HOSTNAME などほかの Environment= も引き継ぐ
 set -eu
 
 if [ "$(id -u)" = 0 ]; then
@@ -36,8 +36,14 @@ case "$(uname -m)" in
   *) echo "未対応のアーキテクチャ: $(uname -m)" >&2; exit 1 ;;
 esac
 
-if [ -z "${PASS:-}" ] && [ -f "$unit" ]; then
-  PASS=$(sed -n 's/^Environment="PASS=\(.*\)"$/\1/p' "$unit")
+# 既に入っているユニットから PASS と、それ以外の設定（HOSTNAME など）を引き継ぐ。
+# Environment="PASS=…" と Environment=PASS=… のどちらの書き方も読む
+keep=
+if [ -f "$unit" ]; then
+  if [ -z "${PASS:-}" ]; then
+    PASS=$(sed -n -e 's/^Environment="PASS=\(.*\)"$/\1/p' -e 's/^Environment=PASS=\([^"]*\)$/\1/p' "$unit" | head -n 1)
+  fi
+  keep=$(grep -E '^Environment=' "$unit" | grep -vE '^Environment="?(PASS|PCSC_UPDATED)=' || true)
 fi
 [ -n "${PASS:-}" ] || { echo "PASS を指定して（… | PASS=<PASS> sh）" >&2; exit 1; }
 
@@ -61,7 +67,8 @@ After=network-online.target
 [Service]
 Environment="PASS=$PASS"
 Environment="PCSC_UPDATED=terminate"
-ExecStart=$bin
+${keep:+$keep
+}ExecStart=$bin
 Restart=always
 
 [Install]
