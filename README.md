@@ -3,8 +3,7 @@
 PC の状態を取得し、[PC Status](https://pc-stats.eov2.com/)に送信、表示するツールです。
 
 ![Preview - Overview](docs/images/overview.png)
-| ![Preview - Focus to Windows](docs/images/focus-windows.png) | ![Preview - Focus to Linux](docs/images/focus-linux.png) |
-|---|---|
+![Preview - Focus](docs/images/focus.png)
 
 ## 注意
 
