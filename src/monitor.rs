@@ -1,16 +1,28 @@
-use std::{sync::Arc, thread, time::Duration};
+use std::{
+    sync::Arc,
+    thread,
+    time::{Duration, Instant},
+};
 
 use arc_swap::ArcSwap;
 use sysinfo::{CpuRefreshKind, DiskRefreshKind, Disks, MemoryRefreshKind, RefreshKind, System};
 
-use crate::status::{Identity, SystemStatus};
+use crate::{
+    io,
+    status::{Identity, SystemStatus},
+};
 
 pub type SharedStatus = Arc<ArcSwap<SystemStatus>>;
 
-/// sysinfo state kept between samples (CPU usage needs the previous one).
+/// State kept between samples: CPU usage, disk reads/writes and IO wait are
+/// all the change since the previous sample.
 pub struct Sampler {
     pub system: System,
     pub disks: Disks,
+    pub io: io::Tracker,
+    /// Time between the last two samples; zero before the second one.
+    pub interval: Duration,
+    sampled_at: Instant,
 }
 
 fn refresh_kind() -> RefreshKind {
@@ -19,20 +31,28 @@ fn refresh_kind() -> RefreshKind {
         .with_memory(MemoryRefreshKind::everything())
 }
 
+fn disk_refresh_kind() -> DiskRefreshKind {
+    DiskRefreshKind::nothing().with_storage().with_io_usage()
+}
+
 impl Sampler {
     fn new() -> Self {
         Self {
             system: System::new_with_specifics(refresh_kind()),
-            disks: Disks::new_with_refreshed_list_specifics(
-                DiskRefreshKind::nothing().with_storage(),
-            ),
+            disks: Disks::new_with_refreshed_list_specifics(disk_refresh_kind()),
+            io: io::Tracker::new(),
+            interval: Duration::ZERO,
+            sampled_at: Instant::now(),
         }
     }
 
     fn refresh(&mut self) {
         self.system.refresh_specifics(refresh_kind());
-        self.disks
-            .refresh_specifics(true, DiskRefreshKind::nothing().with_storage());
+        self.disks.refresh_specifics(true, disk_refresh_kind());
+        self.io.refresh();
+        let now = Instant::now();
+        self.interval = now.duration_since(self.sampled_at);
+        self.sampled_at = now;
     }
 }
 

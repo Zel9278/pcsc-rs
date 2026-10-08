@@ -35,11 +35,18 @@ pub struct MemoryData {
     pub(crate) total: u64,
 }
 
-#[derive(Serialize, Clone, PartialEq, Eq, Debug)]
+#[derive(Serialize, Clone, PartialEq, Debug)]
 pub struct StorageData {
     pub(crate) name: String,
     pub(crate) free: u64,
     pub(crate) total: u64,
+    /// Bytes read per second since the previous sample.
+    pub(crate) read: u64,
+    /// Bytes written per second since the previous sample.
+    pub(crate) written: u64,
+    /// Percentage of time the device was busy (Linux only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) busy: Option<f64>,
 }
 
 /// Memory in MiB, as `nvidia-smi` reports it.
@@ -70,6 +77,9 @@ pub struct SystemStatus {
     pub(crate) uptime: u64,
     /// Zeros on Windows, which has no load average.
     pub(crate) loadavg: [f64; 3],
+    /// Percentage of CPU time spent waiting for IO (Linux only; Proxmox's "IO delay").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) iowait: Option<f64>,
     pub(crate) gpus: Vec<GpuData>,
     /// Kept by the server; sent for compatibility with the monorepo server.
     pub(crate) index: u32,
@@ -92,7 +102,18 @@ const VERSION: &str = match option_env!("GIT_DESCRIBE") {
 
 impl SystemStatus {
     pub fn collect(sampler: &Sampler, identity: &Identity) -> Self {
-        let Sampler { system, disks } = sampler;
+        let Sampler {
+            system,
+            disks,
+            io,
+            interval,
+            ..
+        } = sampler;
+        // Bytes since the previous sample, per second; nothing to compare with on the first one
+        let per_second = |bytes: u64| {
+            let millis = u64::try_from(interval.as_millis()).unwrap_or(u64::MAX);
+            bytes.saturating_mul(1000).checked_div(millis).unwrap_or(0)
+        };
 
         let os_name = System::name().unwrap_or_else(|| "Unknown OS".into());
         let os_version = System::os_version()
@@ -130,14 +151,23 @@ impl SystemStatus {
             .iter()
             .filter(|d| d.total_space() != 0 && !d.is_read_only())
         {
-            let storage = StorageData {
-                name: disk.name().to_string_lossy().into_owned(),
-                free: disk.available_space(),
-                total: disk.total_space(),
-            };
-            if !storages.contains(&storage) {
-                storages.push(storage);
+            let name = disk.name().to_string_lossy().into_owned();
+            let (free, total) = (disk.available_space(), disk.total_space());
+            if storages
+                .iter()
+                .any(|s| s.name == name && s.free == free && s.total == total)
+            {
+                continue;
             }
+            let usage = disk.usage();
+            storages.push(StorageData {
+                busy: io.busy(&name),
+                name,
+                free,
+                total,
+                read: per_second(usage.read_bytes),
+                written: per_second(usage.written_bytes),
+            });
         }
 
         Self {
@@ -157,6 +187,7 @@ impl SystemStatus {
             storages,
             uptime: System::uptime(),
             loadavg,
+            iowait: io.iowait(),
             gpus: gpu::get_info(),
             index: 0,
             histories: [],
@@ -181,9 +212,13 @@ pub(crate) fn sample() -> SystemStatus {
             name: "/dev/sda1".into(),
             free: 3,
             total: 4,
+            read: 1024,
+            written: 2048,
+            busy: Some(12.5),
         }],
         uptime: 61,
         loadavg: [0.5, 0.25, 0.125],
+        iowait: Some(1.5),
         gpus: vec![GpuData {
             name: "gpu".into(),
             usage: 7.0,
@@ -208,9 +243,10 @@ mod tests {
                 "cpu": { "model": "cpu", "cpus": [{ "cpu": 12.5 }] },
                 "ram": { "free": 1, "total": 2 },
                 "swap": { "free": 0, "total": 0 },
-                "storages": [{ "name": "/dev/sda1", "free": 3, "total": 4 }],
+                "storages": [{ "name": "/dev/sda1", "free": 3, "total": 4, "read": 1024, "written": 2048, "busy": 12.5 }],
                 "uptime": 61,
                 "loadavg": [0.5, 0.25, 0.125],
+                "iowait": 1.5,
                 "gpus": [{ "name": "gpu", "usage": 7.0, "memory": { "free": 5, "total": 6 } }],
                 "index": 0,
                 "histories": [],

@@ -3,6 +3,7 @@
 mod client;
 mod config;
 mod gpu;
+mod io;
 mod monitor;
 mod status;
 mod update;
