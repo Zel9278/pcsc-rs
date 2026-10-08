@@ -36,7 +36,7 @@ HOSTNAME=ホスト名として表示させたい文字列
 
 ## 使い方
 
-1. [リリースページ](https://github.com/eoeo-org/pcsc-rs/releases)から使用する環境に合った最新のリリースをダウンロードしてください。
+1. [リリースページ](https://github.com/Zel9278/pcsc-rs/releases)から使用する環境に合った最新のリリースをダウンロードしてください。
 2. 適当なフォルダに保存し、同じフォルダに `.env` ファイルを作成して以下の Key を追加してください。
 
 ```env
@@ -73,10 +73,18 @@ sudo systemctl enable --now pcsc-rs
 
 - `PCSC_UPDATED`
 
-  更新処理後の動作の設定
+  更新処理後の動作の設定。新しいリリースの確認は起動時と、起動中は6時間ごとに行います。
 
   | 値          | 説明                      |
   | ----------- | ------------------------- |
   | `none`      | なにもしない (デフォルト) |
   | `terminate` | 終了する                  |
   | `restart`   | 再起動する                |
+
+- `PCSC_URI`
+
+  接続先のサーバー (デフォルト: `https://pcss.eov2.com`)
+
+- `HOSTNAME`
+
+  PC Status に表示するホスト名 (デフォルト: PC のホスト名)
