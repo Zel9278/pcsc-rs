@@ -942,7 +942,7 @@ dependencies = [
 
 [[package]]
 name = "pcsc-rs"
-version = "1.4.22"
+version = "2.0.0"
 dependencies = [
  "arc-swap",
  "cfg-if",
