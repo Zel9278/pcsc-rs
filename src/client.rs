@@ -1,80 +1,188 @@
-//! The socket.io connection to the PC Status server (namespace `/server`).
+//! The WebSocket connection to the PC Status server (`/server`). Messages are
+//! JSON `{"type", "data"}` objects, as in pc-status-monorepo-rs.
 //!
-//! The server says `hi` when we connect; we answer `hi` with the status and the
-//! password. After that it sends `sync` every second and we answer `sync` with
-//! the latest status. A `close` from the server means it refused us (for
-//! instance a client with the same hostname is already connected).
+//! The server says `Hi` when we connect; we answer `Hi` with the status and the
+//! password. After that it sends `Sync` every second and we answer `Sync` with
+//! the latest status. A `Close` from the server means it refused us (a wrong
+//! password, or a client with the same hostname is already connected).
 
-use std::{thread, time::Duration};
+use std::{net::TcpStream, thread, time::Duration};
 
-use rust_socketio::{
-    Event, Payload, RawClient,
-    client::{Client, ClientBuilder},
-};
-use serde_json::json;
+use serde::{Deserialize, Serialize};
+use tungstenite::{Message, WebSocket, stream::MaybeTlsStream};
 
-use crate::{config::Config, monitor::SharedStatus};
+use crate::{config::Config, monitor::SharedStatus, status::SystemStatus};
 
-const RETRY_MIN_MS: u64 = 5_000;
-const RETRY_MAX_MS: u64 = 60_000;
+const RETRY_MIN: Duration = Duration::from_secs(5);
+const RETRY_MAX: Duration = Duration::from_secs(60);
+/// The server sends `Sync` every second; this much silence means the connection is gone.
+const READ_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// Connects, retrying until the server is reachable. Once connected the
-/// client reconnects on its own.
-pub fn connect(config: &Config, status: &SharedStatus) -> Client {
-    let mut wait = Duration::from_millis(RETRY_MIN_MS);
+#[derive(Serialize, Debug)]
+#[serde(tag = "type", content = "data")]
+enum ClientMessage<'a> {
+    Hi {
+        data: &'a SystemStatus,
+        pass: &'a str,
+    },
+    Sync(&'a SystemStatus),
+}
+
+#[derive(Deserialize, Debug, PartialEq, Eq)]
+enum ServerMessage {
+    Hi,
+    Sync,
+    Close,
+    /// Anything else (`Status`, `Toast`, …) is meant for viewers.
+    #[serde(other)]
+    Other,
+}
+
+/// Only `type` matters to us; `data` is a greeting or a viewer payload.
+#[derive(Deserialize)]
+struct Envelope {
+    #[serde(rename = "type")]
+    kind: ServerMessage,
+}
+
+fn parse(text: &str) -> serde_json::Result<ServerMessage> {
+    serde_json::from_str::<Envelope>(text).map(|e| e.kind)
+}
+
+/// How a connection ended.
+enum End {
+    /// The server refused this client.
+    Refused,
+    /// The connection dropped; `true` when it had been working.
+    Lost(bool),
+}
+
+type Socket = WebSocket<MaybeTlsStream<TcpStream>>;
+
+/// Keeps a connection to the server, reconnecting with a growing delay. Never returns.
+pub fn run(config: &Config, status: &SharedStatus) -> ! {
+    let mut wait = RETRY_MIN;
     loop {
-        match builder(config, status.clone()).connect() {
-            Ok(client) => return client,
-            Err(e) => {
-                eprintln!("Connection failed: {e}; retrying in {}s", wait.as_secs());
-                thread::sleep(wait);
-                wait = (wait * 2).min(Duration::from_millis(RETRY_MAX_MS));
+        match session(config, status) {
+            Ok(End::Refused) => {
+                eprintln!(
+                    "The server refused this client (wrong PASS, or the same hostname is already connected)"
+                );
             }
+            Ok(End::Lost(true)) => {
+                println!("Disconnected");
+                wait = RETRY_MIN;
+            }
+            Ok(End::Lost(false)) => println!("Disconnected"),
+            Err(e) => eprintln!("Connection failed: {e}"),
+        }
+        eprintln!("Reconnecting in {}s", wait.as_secs());
+        thread::sleep(wait);
+        wait = (wait * 2).min(RETRY_MAX);
+    }
+}
+
+fn session(config: &Config, status: &SharedStatus) -> tungstenite::Result<End> {
+    let (mut socket, _) = tungstenite::connect(config.uri.as_str())?;
+    set_read_timeout(&socket)?;
+    println!("Connected");
+
+    let mut registered = false;
+    loop {
+        let message = match socket.read() {
+            Ok(message) => message,
+            Err(tungstenite::Error::ConnectionClosed | tungstenite::Error::AlreadyClosed) => {
+                return Ok(End::Lost(registered));
+            }
+            Err(e) => {
+                eprintln!("Error: {e}");
+                return Ok(End::Lost(registered));
+            }
+        };
+        let text = match message {
+            Message::Text(text) => text,
+            Message::Close(_) => return Ok(End::Lost(registered)),
+            _ => continue,
+        };
+        match parse(&text) {
+            Ok(ServerMessage::Hi) => {
+                println!("Received hi");
+                let current = status.load();
+                send(
+                    &mut socket,
+                    &ClientMessage::Hi {
+                        data: &current,
+                        pass: &config.pass,
+                    },
+                )?;
+            }
+            Ok(ServerMessage::Sync) => {
+                registered = true;
+                send(&mut socket, &ClientMessage::Sync(&status.load()))?;
+            }
+            Ok(ServerMessage::Close) => {
+                // The server closes the socket right after; let it finish.
+                let _ = socket.close(None);
+                return Ok(End::Refused);
+            }
+            Ok(ServerMessage::Other) => {}
+            Err(e) => eprintln!("Unknown message ({e}): {text}"),
         }
     }
 }
 
-fn builder(config: &Config, status: SharedStatus) -> ClientBuilder {
-    let pass = config.pass.clone();
-    let hi_status = status.clone();
-
-    ClientBuilder::new(config.uri.clone())
-        .namespace("/server")
-        .reconnect(true)
-        .reconnect_on_disconnect(true)
-        .reconnect_delay(RETRY_MIN_MS, RETRY_MAX_MS)
-        .on(Event::Connect, |_, _| println!("Connected"))
-        .on(Event::Close, |_, _| println!("Disconnected"))
-        .on(Event::Error, |err, _| {
-            eprintln!("Error: {}", describe(&err));
-        })
-        .on("hi", move |payload, socket: RawClient| {
-            println!("Received hi: {}", describe(&payload));
-            let current = hi_status.load();
-            if let Err(e) = socket.emit("hi", json!(current.with_pass(&pass))) {
-                eprintln!("Failed to send hi: {e}");
-            }
-        })
-        .on("sync", move |_, socket: RawClient| {
-            let current = status.load();
-            if let Err(e) = socket.emit("sync", json!(current.as_ref())) {
-                eprintln!("Failed to send sync: {e}");
-            }
-        })
-        .on("close", |_, _| {
-            eprintln!("The server refused this client (is the same hostname already connected?)");
-        })
+fn send(socket: &mut Socket, message: &ClientMessage) -> tungstenite::Result<()> {
+    let json = serde_json::to_string(message).expect("the status always serializes");
+    socket.send(Message::text(json))
 }
 
-fn describe(payload: &Payload) -> String {
-    match payload {
-        Payload::Text(values) => values
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join(", "),
-        Payload::Binary(bytes) => format!("{} bytes", bytes.len()),
-        #[allow(deprecated)]
-        Payload::String(text) => text.clone(),
+fn set_read_timeout(socket: &Socket) -> std::io::Result<()> {
+    let stream = match socket.get_ref() {
+        MaybeTlsStream::Plain(stream) => stream,
+        MaybeTlsStream::NativeTls(stream) => stream.get_ref(),
+        _ => return Ok(()),
+    };
+    stream.set_read_timeout(Some(READ_TIMEOUT))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ClientMessage, ServerMessage, parse};
+    use crate::status;
+
+    #[test]
+    fn client_messages() {
+        let status = status::sample();
+        let hi = serde_json::to_value(ClientMessage::Hi {
+            data: &status,
+            pass: "secret",
+        })
+        .unwrap();
+        assert_eq!(hi["type"], "Hi");
+        assert_eq!(hi["data"]["pass"], "secret");
+        assert_eq!(hi["data"]["data"]["hostname"], "host");
+
+        let sync = serde_json::to_value(ClientMessage::Sync(&status)).unwrap();
+        assert_eq!(sync["type"], "Sync");
+        assert_eq!(sync["data"]["hostname"], "host");
+    }
+
+    #[test]
+    fn server_messages() {
+        let parse = |s: &str| parse(s).unwrap();
+        assert_eq!(parse(r#"{"type":"Hi","data":"hello"}"#), ServerMessage::Hi);
+        assert_eq!(
+            parse(r#"{"type":"Sync","data":"sync"}"#),
+            ServerMessage::Sync
+        );
+        assert_eq!(parse(r#"{"type":"Close"}"#), ServerMessage::Close);
+        assert_eq!(
+            parse(r#"{"type":"Status","data":{}}"#),
+            ServerMessage::Other
+        );
+        assert_eq!(
+            parse(r#"{"type":"Toast","data":{"message":"m","color":"c","toast_time":1}}"#),
+            ServerMessage::Other
+        );
     }
 }

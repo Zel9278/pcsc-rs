@@ -7,8 +7,6 @@ mod monitor;
 mod status;
 mod update;
 
-use std::thread;
-
 pub use config::Config;
 
 /// Checks for an update, starts the system monitor, keeps a connection to the
@@ -17,15 +15,13 @@ pub fn start(config: &Config) -> ! {
     update::check(config.on_update);
     update::spawn_periodic(config.on_update);
 
-    let status = monitor::spawn(config.hostname.clone());
+    let status = monitor::spawn(status::Identity {
+        hostname: config.hostname.clone(),
+        dev: config.dev,
+    });
 
     println!("This OS is supported!");
     println!("Hello, world! {}", config.uri);
 
-    let _client = client::connect(config, &status);
-
-    // The socket.io client runs on its own threads; this one just stays alive.
-    loop {
-        thread::park();
-    }
+    client::run(config, &status)
 }

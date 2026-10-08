@@ -3,7 +3,7 @@ use std::{sync::Arc, thread, time::Duration};
 use arc_swap::ArcSwap;
 use sysinfo::{CpuRefreshKind, DiskRefreshKind, Disks, MemoryRefreshKind, RefreshKind, System};
 
-use crate::status::SystemStatus;
+use crate::status::{Identity, SystemStatus};
 
 pub type SharedStatus = Arc<ArcSwap<SystemStatus>>;
 
@@ -38,11 +38,10 @@ impl Sampler {
 
 /// Samples the system every second on its own thread. The returned handle
 /// always holds the latest sample, so sending never waits for a measurement.
-pub fn spawn(hostname: Option<String>) -> SharedStatus {
+pub fn spawn(identity: Identity) -> SharedStatus {
     let mut sampler = Sampler::new();
     let shared: SharedStatus = Arc::new(ArcSwap::from_pointee(SystemStatus::collect(
-        &sampler,
-        hostname.as_deref(),
+        &sampler, &identity,
     )));
 
     let writer = Arc::clone(&shared);
@@ -52,10 +51,7 @@ pub fn spawn(hostname: Option<String>) -> SharedStatus {
             loop {
                 thread::sleep(Duration::from_secs(1));
                 sampler.refresh();
-                writer.store(Arc::new(SystemStatus::collect(
-                    &sampler,
-                    hostname.as_deref(),
-                )));
+                writer.store(Arc::new(SystemStatus::collect(&sampler, &identity)));
             }
         })
         .expect("Failed to start the system monitor thread");
