@@ -123,9 +123,13 @@ impl SystemStatus {
         };
 
         // The same device can be mounted several times (btrfs subvolumes and
-        // the like); list it once.
+        // the like); list it once. Read-only mounts (AppImage, snap, ISO) are
+        // images that always look full, so leave them out.
         let mut storages: Vec<StorageData> = Vec::new();
-        for disk in disks.iter().filter(|d| d.total_space() != 0) {
+        for disk in disks
+            .iter()
+            .filter(|d| d.total_space() != 0 && !d.is_read_only())
+        {
             let storage = StorageData {
                 name: disk.name().to_string_lossy().into_owned(),
                 free: disk.available_space(),
