@@ -1,57 +1,95 @@
-use cfg_if::cfg_if;
-use regex::Regex;
+//! NVIDIA GPU usage through `nvidia-smi`. Anything unexpected means "no GPU".
 
-use crate::status::{GpuData, GpuMemory};
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 use std::process::Command;
 
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x08000000;
+use crate::status::{GpuData, GpuMemory};
 
 pub fn get_info() -> Option<GpuData> {
-    let mut binding = Command::new("nvidia-smi");
-    let command = binding.args([
-        "--format=csv",
+    let mut command = Command::new("nvidia-smi");
+    command.args([
+        "--format=csv,noheader,nounits",
         "--query-gpu=name,utilization.gpu,memory.free,memory.total",
     ]);
 
-    cfg_if! {
-        if #[cfg(target_os = "windows")] {
-            command.creation_flags(CREATE_NO_WINDOW);
-        }
-    };
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
 
-    let output = command.output();
-    if output.is_err() {
+    let output = command.output().ok()?;
+    if !output.status.success() {
         return None;
-    } else {
-        let res = output.expect("process error");
+    }
+    parse(&String::from_utf8_lossy(&output.stdout))
+}
 
-        let split_seperator = Regex::new(r"\r\n|\n").expect("Invalid regex");
-        let split_binding = String::from_utf8(res.stdout).unwrap();
-        let splited: Vec<_> = split_seperator.split(&split_binding).into_iter().collect();
+/// One line per GPU, e.g. `NVIDIA GeForce RTX 3050 Ti Laptop GPU, 0, 3784, 4096`.
+/// Only the first GPU is reported.
+fn parse(output: &str) -> Option<GpuData> {
+    let line = output.lines().find(|l| !l.trim().is_empty())?;
+    // The name itself may contain commas, so read the numbers from the right.
+    let mut fields = line.rsplitn(4, ',').map(str::trim);
+    let total = fields.next()?.parse().ok()?;
+    let free = fields.next()?.parse().ok()?;
+    let usage = fields.next()?.parse().ok(); // "[N/A]" on some GPUs
+    let name = fields.next()?.to_owned();
+    Some(GpuData {
+        name,
+        usage,
+        memory: GpuMemory { free, total },
+    })
+}
 
-        let replace_seperator = Regex::new(r" %| MiB| GiB|\r").expect("Invalid regex");
-        let split2_seperator = Regex::new(r", ").expect("Invalid regex");
-        let replaced =
-            replace_seperator.replace_all(splited.get(1).expect("not found at index 1"), "");
-        let splited2: Vec<_> = split2_seperator.split(&replaced).into_iter().collect();
+#[cfg(test)]
+mod tests {
+    use super::parse;
+    use crate::status::{GpuData, GpuMemory};
 
-        let usage: Option<u64> = match splited2[1] {
-            "[N/A]" => None,
-            _ => Some(splited2[1].to_string().parse::<u64>().unwrap()),
-        };
+    #[test]
+    fn parses_a_gpu() {
+        assert_eq!(
+            parse("NVIDIA GeForce RTX 3050 Ti Laptop GPU, 7, 3784, 4096\n"),
+            Some(GpuData {
+                name: "NVIDIA GeForce RTX 3050 Ti Laptop GPU".into(),
+                usage: Some(7),
+                memory: GpuMemory {
+                    free: 3784,
+                    total: 4096
+                },
+            })
+        );
+    }
 
-        let result = Some(GpuData {
-            name: splited2[0].into(),
-            usage,
-            memory: GpuMemory {
-                free: splited2[2].to_string().parse::<u64>().unwrap(),
-                total: splited2[3].to_string().parse::<u64>().unwrap(),
-            },
-        });
+    #[test]
+    fn usage_not_available() {
+        let gpu = parse("Tesla K80, [N/A], 11000, 11441\r\n").unwrap();
+        assert_eq!(gpu.usage, None);
+        assert_eq!(gpu.memory.total, 11441);
+    }
 
-        return result;
-    };
+    #[test]
+    fn first_of_several_gpus() {
+        let gpu = parse("GPU A, 1, 2, 3\nGPU B, 4, 5, 6\n").unwrap();
+        assert_eq!(gpu.name, "GPU A");
+    }
+
+    #[test]
+    fn name_with_comma() {
+        assert_eq!(
+            parse("Vendor, Model X, 50, 100, 200").unwrap().name,
+            "Vendor, Model X"
+        );
+    }
+
+    #[test]
+    fn errors_mean_no_gpu() {
+        assert_eq!(parse(""), None);
+        assert_eq!(
+            parse("NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver."),
+            None
+        );
+        assert_eq!(parse("GPU, 1, [N/A], [N/A]"), None);
+    }
 }
