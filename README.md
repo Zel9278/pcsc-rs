@@ -36,9 +36,9 @@ HOSTNAME=ホスト名として表示させたい文字列
 
 ## 使い方
 
-Linux は[下のコマンド](#linux)で入れられます。
+Linux と macOS は[コマンド1つ](#linux)で、NixOS などの Nix では [flake](#nix) で入れられます。
 
-### Windows, macOS
+### Windows
 
 1. [リリースページ](https://github.com/Zel9278/pcsc-rs/releases)から使用する環境に合った最新のリリースをダウンロードしてください。
 2. 適当なフォルダに保存し、同じフォルダに `.env` ファイルを作成して以下の Key を追加してください。
@@ -47,11 +47,10 @@ Linux は[下のコマンド](#linux)で入れられます。
 PASS=npU7pmkkYfuUdKfqzm2BtDfBPEe4pizrXyPVj8Fby3KaUtehNu3ToDtM8uEdGBr3AS9LRUkZixtZxuKTvsL2e4BVrfzWWG7RqqVThLWsVLHLaJJ8ekeGuHtLBkfZpBtv
 ```
 
-3. ダウンロードしたリリースを実行してください。\
-   macOS では予め `$ chmod +x <ファイル名>` で実行権限を付与する必要があります。
+3. ダウンロードしたリリースを実行してください。
 4. [PC Status](https://pc-stats.eov2.com/)にアクセスし、自分の PC が表示されていれば完了です。
 
-Windows では、必要に応じて `pcsc-rs.exe` のショートカットを `shell:startup` に追加すれば、PC と同時に起動するようになります。
+必要に応じて `pcsc-rs.exe` のショートカットを `shell:startup` に追加すれば、PC と同時に起動するようになります。
 
 ### Linux
 
@@ -65,6 +64,7 @@ curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | s
 curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | PASS=npU7pmkkYfuUdKfqzm2BtDfBPEe4pizrXyPVj8Fby3KaUtehNu3ToDtM8uEdGBr3AS9LRUkZixtZxuKTvsL2e4BVrfzWWG7RqqVThLWsVLHLaJJ8ekeGuHtLBkfZpBtv sh
 ```
 
+- NixOS ではシステム全体には入れられません（`/etc/systemd` が設定から作られるため）。[Nix](#nix) のモジュールを使ってください。
 - 状態は `systemctl status pcsc-rs`（ユーザー版は `systemctl --user status pcsc-rs`）、ログは `journalctl -u pcsc-rs`（ユーザー版は `journalctl --user -u pcsc-rs`）で見られます。
 - ユーザー版をログアウト中も動かすには `loginctl enable-linger` が必要です。
 - もう一度実行すると、入っているサービスの `PASS` のまま最新版に入れ直します（`PASS=` は省略可）。
@@ -96,6 +96,61 @@ sudo systemctl enable --now pcsc-rs
 ```
 
 </details>
+
+### macOS
+
+Linux と同じコマンドで最新のリリースを入れ、launchd に登録して起動します。ログイン時に起動し、終了したら（更新のあとも）起動し直します。
+
+```sh
+# このユーザーだけ（~/.local/bin、~/Library/LaunchAgents。sudo 不要）
+curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | PASS=npU7pmkkYfuUdKfqzm2BtDfBPEe4pizrXyPVj8Fby3KaUtehNu3ToDtM8uEdGBr3AS9LRUkZixtZxuKTvsL2e4BVrfzWWG7RqqVThLWsVLHLaJJ8ekeGuHtLBkfZpBtv sh
+
+# Mac 全体（/usr/local/bin、/Library/LaunchDaemons。ログインしていなくても動く）
+curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | sudo PASS=npU7pmkkYfuUdKfqzm2BtDfBPEe4pizrXyPVj8Fby3KaUtehNu3ToDtM8uEdGBr3AS9LRUkZixtZxuKTvsL2e4BVrfzWWG7RqqVThLWsVLHLaJJ8ekeGuHtLBkfZpBtv sh
+```
+
+- 状態は `launchctl print gui/$(id -u)/io.github.zel9278.pcsc-rs`（Mac 全体なら `sudo launchctl print system/io.github.zel9278.pcsc-rs`）、ログは `~/Library/Logs/pcsc-rs.log`（Mac 全体なら `/var/log/pcsc-rs.log`）。
+- もう一度実行すると、入っている設定の `PASS` と `HOSTNAME`・`DEV_MODE`・`PCSC_URI` のまま最新版に入れ直します。
+- `HOSTNAME` などを足すときは、plist に書いてからもう一度実行します。
+
+  ```sh
+  plutil -insert EnvironmentVariables.HOSTNAME -string "表示したい名前" ~/Library/LaunchAgents/io.github.zel9278.pcsc-rs.plist
+  curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | sh
+  ```
+
+- 止めて消すとき: `launchctl bootout gui/$(id -u)/io.github.zel9278.pcsc-rs` のあと、plist と `~/.local/bin/pcsc-rs` を消します。
+- ブラウザでダウンロードした実行ファイルを直接使うときは、`chmod +x` と `xattr -d com.apple.quarantine <ファイル名>` が必要です（上のコマンドでは不要）。
+
+### Nix
+
+[flake](flake.nix) でパッケージと、NixOS・nix-darwin・home-manager 用のモジュール（`services.pcsc-rs`）を配っています。Nix で入れた pcsc-rs は自分では更新せず、`nix flake update` などで更新します。
+
+```nix
+# flake.nix
+{
+  inputs.pcsc-rs.url = "github:Zel9278/pcsc-rs";
+  inputs.pcsc-rs.inputs.nixpkgs.follows = "nixpkgs";
+}
+```
+
+```nix
+# NixOS（systemd のサービス）: nixosConfigurations.<host>.modules に pcsc-rs.nixosModules.default
+# nix-darwin（LaunchDaemon）: darwinConfigurations.<host>.modules に pcsc-rs.darwinModules.default
+# home-manager（Linux は systemd --user、macOS は LaunchAgent）: pcsc-rs.homeManagerModules.default
+{
+  services.pcsc-rs = {
+    enable = true;
+    # PASS=<パスワード> の1行を書いたファイル。sops-nix や agenix の出力など
+    passFile = "/run/secrets/pcsc-rs.env";
+    # または pass = "…";（Nix ストアに入り、誰でも読めます）
+    # hostname = "表示したい名前";
+    # devMode = true;
+    # uri = "wss://pcss.eov2.com/server";
+  };
+}
+```
+
+モジュールを使わずに試すだけなら `PASS=… nix run github:Zel9278/pcsc-rs` で動きます。
 
 ## その他の設定
 
