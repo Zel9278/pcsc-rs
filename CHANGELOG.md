@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.0.0](https://github.com/Zel9278/pcsc-rs/compare/v1.4.22...v2.0.0) (2026-10-08)
+
+
+### ⚠ BREAKING CHANGES
+
+* the client needs a server that accepts WebSocket (pc-status with routes/server.ts). socket.io-only servers no longer work.
+
+### Features
+
+* survive connection and GPU errors, check for updates while running ([#653](https://github.com/Zel9278/pcsc-rs/issues/653)) ([5896dc2](https://github.com/Zel9278/pcsc-rs/commit/5896dc28e7034243974520057ee9d19c68b03270))
+* talk WebSocket to the server, send every NVIDIA GPU ([#656](https://github.com/Zel9278/pcsc-rs/issues/656)) ([51db87d](https://github.com/Zel9278/pcsc-rs/commit/51db87dcec4572e645702f81ebcef7496d9f3d55))
+
+
+### Dependencies
+
+* update rust crate cfg-if to v1.0.1 ([#651](https://github.com/Zel9278/pcsc-rs/issues/651)) ([f42ddb7](https://github.com/Zel9278/pcsc-rs/commit/f42ddb7a23865b87f1eb30b832dcadbdb31d73ca))
+
 ## [1.4.22](https://github.com/eoeo-org/pcsc-rs/compare/v1.4.21...v1.4.22) (2025-06-05)
 
 
