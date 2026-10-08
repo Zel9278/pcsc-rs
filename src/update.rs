@@ -12,9 +12,20 @@ const REPO_NAME: &str = "pcsc-rs";
 /// Long-running clients look for a new release this often, not only at start.
 const CHECK_INTERVAL: Duration = Duration::from_hours(6);
 
+/// The package manager that owns the binary, if any. Nix installs it into its
+/// read-only store and updates it itself, so replacing it here would fail.
+fn managed_by() -> Option<&'static str> {
+    let exe = std::env::current_exe().ok()?;
+    exe.starts_with("/nix/store").then_some("Nix")
+}
+
 /// Replaces the running binary with the latest release when there is one,
 /// then follows `PCSC_UPDATED`. Failures are logged and otherwise ignored.
 pub fn check(on_update: OnUpdate) {
+    if let Some(manager) = managed_by() {
+        println!("Installed by {manager}; updates come from {manager}, not from GitHub releases");
+        return;
+    }
     match update() {
         Ok(Some(bin)) => {
             println!("Updated to the latest release");
@@ -30,6 +41,9 @@ pub fn check(on_update: OnUpdate) {
 }
 
 pub fn spawn_periodic(on_update: OnUpdate) {
+    if managed_by().is_some() {
+        return;
+    }
     let spawned = thread::Builder::new()
         .name("Updater".into())
         .spawn(move || {
