@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.5.0](https://github.com/Zel9278/pcsc-rs/compare/v2.4.0...v2.5.0) (2026-10-09)
+
+
+### Features
+
+* report battery and sensor temperatures ([#672](https://github.com/Zel9278/pcsc-rs/issues/672)) ([b4fe234](https://github.com/Zel9278/pcsc-rs/commit/b4fe234990b59e56d59b8dccd8449c1cdf07d0a7))
+* report the GPU usage of Samsung Galaxy phones ([#671](https://github.com/Zel9278/pcsc-rs/issues/671)) ([4a4c544](https://github.com/Zel9278/pcsc-rs/commit/4a4c544e2833356886ab3120dbbc7448d11fbfdc))
+
 ## [2.4.0](https://github.com/Zel9278/pcsc-rs/compare/v2.3.0...v2.4.0) (2026-10-09)
 
 
