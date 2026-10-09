@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="subtitle">このスマホの PC Status クライアント</string>
+
+    <string name="access_title">権限</string>
+    <string name="access_explain">CPU や GPU の使用率を adb shell と同じ方法で読むので、root か、このスマホ自身のワイヤレスデバッグ（root 不要）で動かします。</string>
+    <string name="use_root">root を使う</string>
+    <string name="root_ok">root: 許可済み</string>
+    <string name="root_failed">root の許可が得られませんでした: %1$s</string>
+
+    <string name="use_adb">ワイヤレスデバッグ（root 不要）</string>
+    <string name="adb_ready">ワイヤレスデバッグ: 接続済み</string>
+    <string name="adb_needs_pairing">ワイヤレスデバッグ: 先にこのアプリをペアリングしてください</string>
+    <string name="adb_off">ワイヤレスデバッグがオフです（または Wi-Fi につながっていません）</string>
+    <string name="adb_old_android">この Android にはワイヤレスデバッグがありません。PC から `adb tcpip 5555` を一度実行してください（再起動のたびに必要）。</string>
+    <string name="adb_pair">ペアリングする</string>
+    <string name="adb_switch_on">ワイヤレスデバッグをオンにする</string>
+    <string name="adb_open_settings">設定を開く</string>
+    <string name="adb_steps">1. 開発者向けオプション → ワイヤレスデバッグ をオンにする\n2. 「ペア設定コードによるデバイスのペア設定」を押す\n3. 出てきた 6 桁のコードを、このアプリの通知に入力する</string>
+    <string name="adb_wifi">ワイヤレスデバッグは Wi-Fi が必要です。ネットワークごとに初回だけ「このネットワークで常に許可」を選んでください。</string>
+    <string name="pairing_channel">ペアリング</string>
+    <string name="pairing_title">ワイヤレスデバッグとペアリング</string>
+    <string name="pairing_text">「ペア設定コードによるデバイスのペア設定」を開いて、コードをここに入力</string>
+    <string name="pairing_code">ペア設定コード</string>
+    <string name="pairing_enter">コードを入力</string>
+    <string name="pairing_failed">ペアリングできませんでした（%1$s）。もう一度入力してください。</string>
+    <string name="pairing_done">ペアリングしました</string>
+    <string name="pairing_done_text">pcsc-rs がワイヤレスデバッグを使えるようになりました</string>
+    <string name="start_on_boot_adb">ワイヤレスデバッグを許可したことのある Wi-Fi につながっている必要があります。開始のときにアプリがワイヤレスデバッグをオンにします（USB デバッグがオンなら、終わったらオフに戻します）。</string>
+
+    <string name="use_shizuku">Shizuku</string>
+    <string name="shizuku_not_installed">Shizuku が入っていません。</string>
+    <string name="shizuku_not_running">Shizuku が動いていません。Shizuku のアプリで起動してください。</string>
+    <string name="shizuku_unsupported">Shizuku が古すぎます（v11 以降が必要）。</string>
+    <string name="shizuku_needs_permission">Shizuku: このアプリを許可してください</string>
+    <string name="shizuku_denied">Shizuku: 拒否されています。Shizuku のアプリで許可してください。</string>
+    <string name="shizuku_ready">Shizuku: 許可済み</string>
+    <string name="allow">許可する</string>
+    <string name="get_shizuku">Shizuku を入手</string>
+    <string name="shizuku_note">Shizuku は一度起動すれば、スマホを再起動するまで Wi-Fi なしでも使えます。</string>
+    <string name="start_on_boot_shizuku">Shizuku の場合は、Shizuku 自体が起動時に動くとき（Sui や root）だけ効きます。</string>
+
+    <string name="adb_usb_off">USB デバッグがオフです。このままだと、ワイヤレスデバッグがオフになったとき（手動で切った、Wi-Fi が切れた）にクライアントも止まります。開発者向けオプションで USB デバッグをオンにしておいてください。</string>
+    <string name="pairing_notifications_off">このアプリの通知がオフです。ペア設定コードは通知に入力するので、先に通知をオンにしてください。</string>
+    <string name="open_notification_settings">通知の設定</string>
+
+    <string name="status_title">クライアント</string>
+    <string name="status_running">動作中</string>
+    <string name="status_stopped">停止中</string>
+    <string name="status_connected">サーバーに接続中</string>
+    <string name="status_not_connected">接続できていません（ログを見てください）</string>
+    <string name="status_version">バージョン: %1$s</string>
+    <string name="start">開始</string>
+    <string name="restart">再起動</string>
+    <string name="stop">停止</string>
+    <string name="refresh">更新</string>
+    <string name="keeps_running">アプリを閉じても、停止するかスマホを再起動するまで動き続けます。</string>
+
+    <string name="settings_title">設定</string>
+    <string name="pass">PASS</string>
+    <string name="pass_needed">先に PASS を入れてください</string>
+    <string name="hostname">PC Status に出す名前</string>
+    <string name="hostname_hint">未入力なら: %1$s</string>
+    <string name="uri">サーバー（任意）</string>
+    <string name="uri_hint">未入力なら PC Status</string>
+    <string name="no_quote">\' と改行は使えません</string>
+    <string name="start_on_boot">スマホの再起動後に自動で開始</string>
+    <string name="imported">このスマホに入っていたクライアントの設定を読み込みました</string>
+
+    <string name="log_title">ログ</string>
+    <string name="log_empty">ログはまだありません</string>
+    <string name="failed">失敗しました: %1$s</string>
+</resources>

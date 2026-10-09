@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">pcsc-rs</string>
+    <string name="subtitle">PC Status client for this phone</string>
+
+    <string name="access_title">Access</string>
+    <string name="access_explain">The client reads CPU and GPU usage the way adb shell can, so it runs with root or through this phone\'s own wireless debugging (no root needed).</string>
+    <string name="use_root">Use root</string>
+    <string name="root_ok">Root: granted</string>
+    <string name="root_failed">Root was not granted: %1$s</string>
+
+    <string name="use_adb">Wireless debugging (no root needed)</string>
+    <string name="adb_ready">Wireless debugging: connected</string>
+    <string name="adb_needs_pairing">Wireless debugging: pair this app first</string>
+    <string name="adb_off">Wireless debugging is off (or the phone is not on Wi-Fi)</string>
+    <string name="adb_old_android">This Android has no wireless debugging. Run `adb tcpip 5555` once from a PC (again after every restart).</string>
+    <string name="adb_pair">Pair</string>
+    <string name="adb_switch_on">Turn on wireless debugging</string>
+    <string name="adb_open_settings">Open settings</string>
+    <string name="adb_steps">1. Developer options → Wireless debugging: turn it on\n2. Tap “Pair device with pairing code”\n3. Type the 6-digit code into this app’s notification</string>
+    <string name="adb_wifi">Wireless debugging needs Wi-Fi. The first time on each network, allow it on that network (“Always allow”).</string>
+    <string name="pairing_channel">Pairing</string>
+    <string name="pairing_title">Pair with wireless debugging</string>
+    <string name="pairing_text">Open “Pair device with pairing code” and type the code here</string>
+    <string name="pairing_code">Pairing code</string>
+    <string name="pairing_enter">Enter code</string>
+    <string name="pairing_failed">Pairing failed (%1$s). Try again.</string>
+    <string name="pairing_done">Paired</string>
+    <string name="pairing_done_text">pcsc-rs can use wireless debugging now</string>
+    <string name="start_on_boot_adb">The phone has to be on a Wi-Fi network where wireless debugging was allowed. The app turns wireless debugging on to start the client (and back off when USB debugging is on).</string>
+
+    <string name="use_shizuku">Shizuku</string>
+    <string name="shizuku_not_installed">Shizuku is not installed.</string>
+    <string name="shizuku_not_running">Shizuku is not running. Start it in the Shizuku app.</string>
+    <string name="shizuku_unsupported">This Shizuku is too old (v11 or later is needed).</string>
+    <string name="shizuku_needs_permission">Shizuku: allow this app</string>
+    <string name="shizuku_denied">Shizuku: denied. Allow it in the Shizuku app.</string>
+    <string name="shizuku_ready">Shizuku: allowed</string>
+    <string name="allow">Allow</string>
+    <string name="get_shizuku">Get Shizuku</string>
+    <string name="shizuku_note">Once started, Shizuku keeps working without Wi-Fi, until the phone restarts.</string>
+    <string name="start_on_boot_shizuku">With Shizuku this works only when Shizuku also starts on boot (Sui, or root).</string>
+
+    <string name="adb_usb_off">USB debugging is off. Then the client stops whenever wireless debugging turns off (switched off, Wi-Fi lost). Turn on USB debugging in Developer options to keep it running.</string>
+    <string name="pairing_notifications_off">Notifications for this app are off. The pairing code is typed into a notification, so turn them on first.</string>
+    <string name="open_notification_settings">Notification settings</string>
+
+    <string name="status_title">Client</string>
+    <string name="status_running">Running</string>
+    <string name="status_stopped">Stopped</string>
+    <string name="status_connected">Connected to the server</string>
+    <string name="status_not_connected">Not connected (see the log)</string>
+    <string name="status_version">Version: %1$s</string>
+    <string name="start">Start</string>
+    <string name="restart">Restart</string>
+    <string name="stop">Stop</string>
+    <string name="refresh">Refresh</string>
+    <string name="keeps_running">It keeps running after you close the app, until you stop it or restart the phone.</string>
+
+    <string name="settings_title">Settings</string>
+    <string name="pass">PASS</string>
+    <string name="pass_needed">Enter PASS first</string>
+    <string name="hostname">Name shown on PC Status</string>
+    <string name="hostname_hint">Default: %1$s</string>
+    <string name="uri">Server (optional)</string>
+    <string name="uri_hint">Default: PC Status</string>
+    <string name="no_quote">Cannot contain \' or a line break</string>
+    <string name="start_on_boot">Start after the phone restarts</string>
+    <string name="imported">Loaded the settings of the client already on this phone</string>
+
+    <string name="log_title">Log</string>
+    <string name="log_empty">No log yet</string>
+    <string name="failed">Failed: %1$s</string>
+</resources>

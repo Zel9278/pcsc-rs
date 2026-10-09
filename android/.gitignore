@@ -1,0 +1,7 @@
+.gradle/
+build/
+local.properties
+*.jks
+*.keystore
+# The client binary is copied in before the build (see app/build.gradle.kts)
+app/src/main/jniLibs/

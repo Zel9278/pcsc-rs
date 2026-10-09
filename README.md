@@ -145,6 +145,26 @@ curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | s
 
 ### Android（試験的）
 
+#### アプリ（ワイヤレスデバッグ・Shizuku・root）
+
+[Releases](https://github.com/Zel9278/pcsc-rs/releases/latest) の `pcsc-rs-<バージョン>-android.apk`（arm64）を入れて開き、動かし方を選んで、PASS を入れて「開始」を押します。動かし方は次の3つから選べます。
+
+| 動かし方 | 要るもの | 向いている場合 |
+|---|---|---|
+| ワイヤレスデバッグ | Android 11 以降・Wi-Fi。最初に一度だけペアリングする（コードは通知に入力） | root も Shizuku も無い |
+| Shizuku | [Shizuku](https://shizuku.rikka.app/) が動いていること | もう Shizuku を使っている。一度起動すれば、再起動まで Wi-Fi なしで操作できる |
+| root | root 化した端末（`su 2000` で shell の権限に下げて動かす） | 再起動後の自動開始を確実にしたい |
+
+- 動かし方は下の adb 版と同じで、`/data/local/tmp/pcsc-rs` に置いて端末から切り離して動かします。アプリを閉じても動き続けます
+- ワイヤレスデバッグと Shizuku のときは、開発者向けオプションの USB デバッグをオンにしておいてください。オフだと、ワイヤレスデバッグがオフになったとき（Wi-Fi が切れたときも）に adbd と一緒にクライアントも止まります
+- adb 版で入れていたときは、PASS と名前をそのまま読み込みます
+- ワイヤレスデバッグは、ペアリングしたあとはアプリが自分でオンにできます（ネットワークごとに初回だけ「このネットワークで常に許可」が要ります）
+- 「スマホの再起動後に自動で開始」: root はそのまま、ワイヤレスデバッグは許可済みの Wi-Fi につながっていれば、Shizuku は Shizuku も起動時に動く（Sui や root）ときだけ効きます
+
+自分でビルドするときは [android/README.md](android/README.md) を見てください。
+
+#### PC から adb で
+
 root なしで、PC から adb で入れます（[scripts/android-adb.sh](scripts/android-adb.sh)）。adb shell の権限で動くので、CPU（コアごと）・GPU（Adreno）・ロードアベレージも取れます。
 
 ```sh
