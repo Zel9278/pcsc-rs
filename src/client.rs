@@ -139,7 +139,10 @@ fn send(socket: &mut Socket, message: &ClientMessage) -> tungstenite::Result<()>
 fn set_read_timeout(socket: &Socket) -> std::io::Result<()> {
     let stream = match socket.get_ref() {
         MaybeTlsStream::Plain(stream) => stream,
+        #[cfg(feature = "native-tls")]
         MaybeTlsStream::NativeTls(stream) => stream.get_ref(),
+        #[cfg(feature = "xp")]
+        MaybeTlsStream::Rustls(stream) => stream.get_ref(),
         _ => return Ok(()),
     };
     stream.set_read_timeout(Some(READ_TIMEOUT))
