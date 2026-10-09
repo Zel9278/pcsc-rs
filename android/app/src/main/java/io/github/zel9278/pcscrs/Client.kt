@@ -50,7 +50,10 @@ done
         val version = BuildConfig.VERSION_CODE
         val script = listOf(
             "set -e",
+            // Shizuku's process has umask 0; only the shell user (and root) may write here
+            "umask 022",
             "mkdir -p $DIR",
+            "chmod 755 $DIR",
             "cd $DIR",
             STOP,
             "if [ ! -x pcsc-rs ] || [ \"\$(cat apk-version 2>/dev/null)\" != $version ]; then " +
