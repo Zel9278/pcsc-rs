@@ -1,5 +1,5 @@
-//! GPU usage: NVIDIA through `nvidia-smi`, and Qualcomm Adreno (Android) through
-//! the kgsl driver's sysfs files. Anything unexpected means "no GPU".
+//! GPU usage: NVIDIA through `nvidia-smi`, and phone GPUs (Qualcomm Adreno,
+//! Samsung's Mali / Xclipse) through sysfs. Anything unexpected means "no GPU".
 
 use std::process::Command;
 
@@ -9,7 +9,7 @@ pub fn get_info() -> Vec<GpuData> {
     let gpus = nvidia();
     #[cfg(any(target_os = "linux", target_os = "android"))]
     if gpus.is_empty() {
-        return adreno::get_info().into_iter().collect();
+        return mobile::get_info().into_iter().collect();
     }
     gpus
 }
@@ -57,14 +57,15 @@ fn parse_line(line: &str) -> Option<GpuData> {
     })
 }
 
-/// Adreno GPUs on Qualcomm phones. The files are readable from `adb shell` (or
-/// through Shizuku), not from an ordinary app.
+/// Phone GPUs, read from sysfs: Qualcomm Adreno (kgsl) and the Mali / Xclipse
+/// GPUs in Samsung's Exynos (Samsung's `/sys/kernel/gpu`). The files are
+/// readable from `adb shell` (or through Shizuku), not from an ordinary app.
 ///
 /// There is no VRAM: the GPU shares the device's memory. On Android the memory
 /// is reported as what the GPU uses out of the whole device memory (`dumpsys
-/// gpu`); elsewhere it is unknown (free and total 0).
+/// gpu`, which works for any GPU); elsewhere it is unknown (free and total 0).
 #[cfg(any(target_os = "linux", target_os = "android"))]
-mod adreno {
+mod mobile {
     use std::{
         fs,
         process::Command,
@@ -74,19 +75,50 @@ mod adreno {
 
     use crate::status::{GpuData, GpuMemory};
 
-    const DIR: &str = "/sys/class/kgsl/kgsl-3d0";
+    const KGSL: &str = "/sys/class/kgsl/kgsl-3d0";
+    const SAMSUNG: &str = "/sys/kernel/gpu";
     /// `dumpsys` takes a few tens of milliseconds; once in a while is enough
     const MEMORY_INTERVAL: Duration = Duration::from_secs(5);
 
     pub fn get_info() -> Option<GpuData> {
-        // Busy time and total time since the previous read (reading resets them)
-        let busy = fs::read_to_string(format!("{DIR}/gpubusy")).ok()?;
-        let model = fs::read_to_string(format!("{DIR}/gpu_model")).unwrap_or_default();
+        let (name, usage) = adreno().or_else(samsung)?;
         Some(GpuData {
-            name: name(model.trim()),
-            usage: usage(&busy)?,
+            name,
+            usage,
             memory: shared_memory().unwrap_or(GpuMemory { free: 0, total: 0 }),
         })
+    }
+
+    fn adreno() -> Option<(String, f64)> {
+        // Busy time and total time since the previous read (reading resets them)
+        let busy = fs::read_to_string(format!("{KGSL}/gpubusy")).ok()?;
+        let model = fs::read_to_string(format!("{KGSL}/gpu_model")).unwrap_or_default();
+        Some((name(model.trim()), usage(&busy)?))
+    }
+
+    /// Galaxy phones with Exynos: `gpu_busy` holds the usage in percent (`12 %`).
+    fn samsung() -> Option<(String, f64)> {
+        let busy = fs::read_to_string(format!("{SAMSUNG}/gpu_busy")).ok()?;
+        let model = fs::read_to_string(format!("{SAMSUNG}/gpu_model")).unwrap_or_default();
+        let model = model.trim();
+        Some((
+            if model.is_empty() {
+                "GPU".into()
+            } else {
+                model.into()
+            },
+            percent(&busy)?,
+        ))
+    }
+
+    /// The first number in the text as a percentage: `12 %`, `12%`, `12`.
+    pub(super) fn percent(text: &str) -> Option<f64> {
+        let start = text.find(|c: char| c.is_ascii_digit())?;
+        let number: String = text[start..]
+            .chars()
+            .take_while(|c| c.is_ascii_digit() || *c == '.')
+            .collect();
+        Some(number.parse::<f64>().ok()?.clamp(0.0, 100.0))
     }
 
     /// GPU memory in MiB as used / whole device memory.
@@ -216,7 +248,7 @@ mod tests {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     #[test]
     fn adreno() {
-        use super::adreno::{global_total, mem_total_kib, name, usage};
+        use super::mobile::{global_total, mem_total_kib, name, percent, usage};
         assert_eq!(
             usage("  23464 1006294"),
             Some(23464.0 / 1_006_294.0 * 100.0)
@@ -227,6 +259,11 @@ mod tests {
         assert_eq!(name("Adreno752v2"), "Adreno 752v2");
         assert_eq!(name("Adreno 740"), "Adreno 740");
         assert_eq!(name(""), "Adreno");
+        assert_eq!(percent("12 %\n"), Some(12.0));
+        assert_eq!(percent("7%"), Some(7.0));
+        assert_eq!(percent(" 99.5\n"), Some(99.5));
+        assert_eq!(percent("250 %"), Some(100.0));
+        assert_eq!(percent("busy"), None);
         assert_eq!(
             global_total(
                 "Memory snapshot for GPU 0:\nGlobal total: 773124096\nProc 461 total: 96882688\n"
