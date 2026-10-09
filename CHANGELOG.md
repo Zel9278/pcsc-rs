@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.6.0](https://github.com/Zel9278/pcsc-rs/compare/v2.5.0...v2.6.0) (2026-10-09)
+
+
+### Features
+
+* Android app (wireless debugging, Shizuku or root) ([#675](https://github.com/Zel9278/pcsc-rs/issues/675)) ([0438d26](https://github.com/Zel9278/pcsc-rs/commit/0438d268039f264482cc8e015c76c09902857c1c))
+* Windows XP build (xp feature) ([#677](https://github.com/Zel9278/pcsc-rs/issues/677)) ([18c9a19](https://github.com/Zel9278/pcsc-rs/commit/18c9a19767d285395140b1b16375d3e094b282ed))
+
+
+### Bug Fixes
+
+* reliability fixes from a full review (EINTR on NixOS, updates, timeouts, installers, Nix) ([#676](https://github.com/Zel9278/pcsc-rs/issues/676)) ([d2ef776](https://github.com/Zel9278/pcsc-rs/commit/d2ef7763239e4bed49e5b74a488b47d1ada6029b))
+
 ## [2.5.0](https://github.com/Zel9278/pcsc-rs/compare/v2.4.0...v2.5.0) (2026-10-09)
 
 
