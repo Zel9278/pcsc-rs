@@ -44,7 +44,7 @@ done
         if (settings.uri.isNotBlank()) append("PCSC_URI='${settings.uri.trim()}'\n")
     }
 
-    suspend fun start(context: Context, shell: PrivilegedShell, settings: Settings, root: Boolean): ShellResult {
+    suspend fun start(context: Context, shell: PrivilegedShell, settings: Settings): ShellResult {
         // Copy the APK's client only when the APK changed, so a client that updated itself
         // is not replaced by an older one on every start
         val version = BuildConfig.VERSION_CODE
@@ -56,14 +56,17 @@ done
             "chmod 755 $DIR",
             "cd $DIR",
             STOP,
-            "if [ ! -x pcsc-rs ] || [ \"\$(cat apk-version 2>/dev/null)\" != $version ]; then " +
-                "cp '${bundled(context)}' pcsc-rs.new && chmod 755 pcsc-rs.new && mv -f pcsc-rs.new pcsc-rs && echo $version > apk-version; fi",
+            // One command per line: set -e does not stop at a failure inside an && list
+            "if [ ! -x pcsc-rs ] || [ \"\$(cat apk-version 2>/dev/null)\" != $version ]; then",
+            "  cp '${bundled(context)}' pcsc-rs.new",
+            "  chmod 755 pcsc-rs.new",
+            "  mv -f pcsc-rs.new pcsc-rs",
+            "  echo $version > apk-version",
+            "fi",
             write(".env", env(settings)),
             write("loop.sh", LOOP),
             "chmod 600 .env",
             "chmod 755 pcsc-rs loop.sh",
-            // Leave the files to the shell user too, so adb (the script or wireless debugging) can take over later
-            if (root) "chown -R 2000:2000 $DIR" else "true",
             "(setsid ./loop.sh > pcsc-rs.log 2>&1 < /dev/null &)",
             "echo started",
         ).joinToString("\n")

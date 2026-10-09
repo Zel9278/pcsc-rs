@@ -3,6 +3,7 @@ package io.github.zel9278.pcscrs
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings as AndroidSettings
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -55,6 +56,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -117,16 +119,25 @@ private fun App(shizukuChanges: MutableIntState) {
     var message by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
 
-    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+    var notificationsBlocked by remember { mutableStateOf(false) }
+    fun askForCode() {
+        // The code can only be typed into the notification; without one there is no way to pair
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+            notificationsBlocked = true
+            return
+        }
+        notificationsBlocked = false
         Pairing.ask(context)
         Pairing.openSettings(context)
+    }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        askForCode()
     }
     fun startPairing() {
         if (Build.VERSION.SDK_INT >= 33) {
             notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
         } else {
-            Pairing.ask(context)
-            Pairing.openSettings(context)
+            askForCode()
         }
     }
 
@@ -248,7 +259,21 @@ private fun App(shizukuChanges: MutableIntState) {
                             }
                         }
                     }
+                    if (notificationsBlocked) {
+                        Text(stringResource(R.string.pairing_notifications_off), color = MaterialTheme.colorScheme.error, style = small)
+                        TextButton(onClick = {
+                            context.startActivity(
+                                Intent(AndroidSettings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                    .putExtra(AndroidSettings.EXTRA_APP_PACKAGE, context.packageName),
+                            )
+                        }) { Text(stringResource(R.string.open_notification_settings)) }
+                    }
                     if (AdbShell.hasWirelessDebugging) Text(stringResource(R.string.adb_wifi), style = small)
+                    // Without USB debugging, adbd (and the client started through it) stops when
+                    // wireless debugging goes off
+                    if (!AdbShell.usbDebuggingOn(context)) {
+                        Text(stringResource(R.string.adb_usb_off), color = MaterialTheme.colorScheme.error, style = small)
+                    }
                 }
                 ModeOption(
                     selected = settings.mode == Mode.SHIZUKU,
@@ -284,8 +309,9 @@ private fun App(shizukuChanges: MutableIntState) {
                     label = if (settings.mode == Mode.ROOT) stringResource(R.string.root_ok) else stringResource(R.string.use_root),
                     onSelect = {
                         scope.launch {
+                            // RootShell is `su 2000`: the shell user, not root
                             val result = RootShell.run("id -u")
-                            if (result.ok && result.output.trim() == "0") {
+                            if (result.ok && result.output.trim() == "2000") {
                                 rootError = null
                                 update(settings.copy(mode = Mode.ROOT))
                             } else {
@@ -312,7 +338,7 @@ private fun App(shizukuChanges: MutableIntState) {
                         val canStart = settings.pass.isNotEmpty() && listOf(settings.pass, settings.hostname, settings.uri).all(::isEnvSafe)
                         Button(
                             enabled = !busy && canStart,
-                            onClick = { act { Client.start(context, mode.shell(), settings, root = mode == Mode.ROOT) } },
+                            onClick = { act { Client.start(context, mode.shell(), settings) } },
                         ) { Text(stringResource(if (s?.running == true) R.string.restart else R.string.start)) }
                         OutlinedButton(enabled = !busy && s?.running == true, onClick = { act { Client.stop(mode.shell()) } }) {
                             Text(stringResource(R.string.stop))

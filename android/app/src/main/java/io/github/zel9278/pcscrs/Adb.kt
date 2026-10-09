@@ -111,6 +111,13 @@ object AdbShell : PrivilegedShell {
     /** Android 11 has wireless debugging; older versions need `adb tcpip 5555` from a PC */
     val hasWirelessDebugging get() = Build.VERSION.SDK_INT >= 30
 
+    /**
+     * USB debugging keeps adbd running. Without it, adbd stops whenever wireless debugging goes
+     * off (switched off, Wi-Fi lost), and init kills everything started through adbd with it.
+     */
+    fun usbDebuggingOn(context: Context): Boolean =
+        AndroidSettings.Global.getInt(context.contentResolver, AndroidSettings.Global.ADB_ENABLED, 0) == 1
+
     fun wirelessDebuggingOn(context: Context): Boolean =
         AndroidSettings.Global.getInt(context.contentResolver, SETTING, 0) == 1
 

@@ -5,7 +5,9 @@ import android.content.Context
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.IBinder
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -32,13 +34,20 @@ object ShizukuShell : PrivilegedShell {
         else -> State.NEEDS_PERMISSION
     }
 
-    override suspend fun run(command: String): ShellResult {
+    override suspend fun run(command: String): ShellResult = try {
         val shell = lock.withLock { service?.takeIf { it.asBinder().pingBinder() } ?: bind().also { service = it } }
-        return withContext(Dispatchers.IO) {
+        withContext(Dispatchers.IO) {
             val raw = shell.exec(command)
             val code = raw.substringBefore('\n').toIntOrNull() ?: -1
             ShellResult(code, raw.substringAfter('\n').trimEnd('\n'))
         }
+    } catch (e: CancellationException) {
+        // The screen went away; not a failure
+        if (e is TimeoutCancellationException) ShellResult(-1, "Shizuku did not start the service") else throw e
+    } catch (e: Exception) {
+        // Shizuku stopped or died (RemoteException, IllegalStateException)
+        service = null
+        ShellResult(-1, e.message.orEmpty())
     }
 
     private suspend fun bind(): IShell = withTimeout(15_000) {

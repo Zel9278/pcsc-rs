@@ -27,7 +27,7 @@
     <string name="pairing_failed">Pairing failed (%1$s). Try again.</string>
     <string name="pairing_done">Paired</string>
     <string name="pairing_done_text">pcsc-rs can use wireless debugging now</string>
-    <string name="start_on_boot_adb">The phone has to be on a Wi-Fi network where wireless debugging was allowed. The app turns wireless debugging on to start the client and back off.</string>
+    <string name="start_on_boot_adb">The phone has to be on a Wi-Fi network where wireless debugging was allowed. The app turns wireless debugging on to start the client (and back off when USB debugging is on).</string>
 
     <string name="use_shizuku">Shizuku</string>
     <string name="shizuku_not_installed">Shizuku is not installed.</string>
@@ -40,6 +40,10 @@
     <string name="get_shizuku">Get Shizuku</string>
     <string name="shizuku_note">Once started, Shizuku keeps working without Wi-Fi, until the phone restarts.</string>
     <string name="start_on_boot_shizuku">With Shizuku this works only when Shizuku also starts on boot (Sui, or root).</string>
+
+    <string name="adb_usb_off">USB debugging is off. Then the client stops whenever wireless debugging turns off (switched off, Wi-Fi lost). Turn on USB debugging in Developer options to keep it running.</string>
+    <string name="pairing_notifications_off">Notifications for this app are off. The pairing code is typed into a notification, so turn them on first.</string>
+    <string name="open_notification_settings">Notification settings</string>
 
     <string name="status_title">Client</string>
     <string name="status_running">Running</string>

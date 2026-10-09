@@ -29,7 +29,7 @@ interface PrivilegedShell {
 }
 
 /**
- * One `su` process kept open, so the root manager asks (and shows its toast) once
+ * One `su 2000` process kept open, so the root manager asks (and shows its toast) once
  * instead of on every status check.
  */
 object RootShell : PrivilegedShell {
@@ -74,7 +74,10 @@ object RootShell : PrivilegedShell {
     private fun open(): Pair<Writer, BufferedReader> {
         val running = process?.takeIf { it.alive() }
         if (running != null) return input!! to output!!
-        val started = ProcessBuilder("su").redirectErrorStream(true).start()
+        // As the shell user (uid 2000), like adb and Shizuku: the client never runs as root, its
+        // files stay the shell user's (nothing a shell process can plant is run as root), and
+        // switching to wireless debugging or Shizuku later can still stop it
+        val started = ProcessBuilder("su", "2000").redirectErrorStream(true).start()
         process = started
         input = started.outputStream.bufferedWriter()
         output = started.inputStream.bufferedReader()
