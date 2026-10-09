@@ -30,6 +30,15 @@ impl Tracker {
         None
     }
 
+    /// Bytes read and written per second by the whole system (zram swap is not in it).
+    /// Only where per-device statistics are not readable (Android).
+    pub fn system_io(&self) -> Option<(u64, u64)> {
+        #[cfg(target_os = "linux")]
+        return self.inner.system_io;
+        #[cfg(not(target_os = "linux"))]
+        None
+    }
+
     /// Percentage of time the device (e.g. `/dev/sda1`) was busy since the previous refresh.
     #[cfg_attr(not(target_os = "linux"), allow(clippy::unused_self))]
     pub fn busy(&self, device: &str) -> Option<f64> {
@@ -82,6 +91,18 @@ mod parse {
             .collect()
     }
 
+    /// KiB read from and written to block devices so far (`pgpgin`/`pgpgout` in
+    /// `/proc/vmstat`). zram swap, which Android uses, is not counted in them.
+    pub fn vm_io(vmstat: &str) -> Option<(u64, u64)> {
+        let value = |key: &str| {
+            vmstat
+                .lines()
+                .find_map(|l| l.strip_prefix(key)?.strip_prefix(' '))
+                .and_then(|v| v.trim().parse::<u64>().ok())
+        };
+        Some((value("pgpgin")?, value("pgpgout")?))
+    }
+
     /// `part / whole` as a percentage, kept within 0–100.
     #[allow(clippy::cast_precision_loss)]
     pub fn percent(part: u64, whole: u64) -> Option<f64> {
@@ -102,6 +123,9 @@ mod linux {
         at: Option<Instant>,
         pub iowait: Option<f64>,
         busy: HashMap<String, f64>,
+        /// KiB read and written so far, from /proc/vmstat
+        vm: Option<(u64, u64)>,
+        pub system_io: Option<(u64, u64)>,
     }
 
     impl Tracker {
@@ -120,7 +144,24 @@ mod linux {
             };
             self.cpu = cpu;
 
-            let ticks: HashMap<String, u64> = fs::read_to_string("/proc/diskstats")
+            let diskstats = fs::read_to_string("/proc/diskstats").ok();
+            // Android keeps /proc/diskstats (and /sys/block/*/stat) from everyone but
+            // root; fall back to the system-wide totals in /proc/vmstat
+            self.system_io = None;
+            if diskstats.is_none() {
+                let vm = fs::read_to_string("/proc/vmstat")
+                    .ok()
+                    .and_then(|s| parse::vm_io(&s));
+                if let (Some(at), Some((old_r, old_w)), Some((r, w))) = (self.at, self.vm, vm) {
+                    let millis =
+                        u64::try_from(now.duration_since(at).as_millis()).unwrap_or(u64::MAX);
+                    let rate = |kib: u64| (kib * 1024 * 1000).checked_div(millis).unwrap_or(0);
+                    self.system_io =
+                        Some((rate(r.saturating_sub(old_r)), rate(w.saturating_sub(old_w))));
+                }
+                self.vm = vm;
+            }
+            let ticks: HashMap<String, u64> = diskstats
                 .map(|s| parse::io_ticks(&s).into_iter().collect())
                 .unwrap_or_default();
             self.busy.clear();
@@ -185,6 +226,16 @@ mod tests {
             ]
         );
         assert_eq!(io_ticks("8 0 short 1 2 3\n"), []);
+    }
+
+    #[test]
+    fn reads_vm_io() {
+        use super::parse::vm_io;
+        let vmstat =
+            "nr_free_pages 1\npgpgin 74489752\npgpgout 9733068\npswpin 1000\npswpout 2000\n";
+        assert_eq!(vm_io(vmstat), Some((74_489_752, 9_733_068)));
+        assert_eq!(vm_io("pgpgin 10\npgpgout 20\n"), Some((10, 20)));
+        assert_eq!(vm_io("nr_free_pages 1\n"), None);
     }
 
     #[test]

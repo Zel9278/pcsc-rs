@@ -1,10 +1,20 @@
-//! NVIDIA GPU usage through `nvidia-smi`. Anything unexpected means "no GPU".
+//! GPU usage: NVIDIA through `nvidia-smi`, and Qualcomm Adreno (Android) through
+//! the kgsl driver's sysfs files. Anything unexpected means "no GPU".
 
 use std::process::Command;
 
 use crate::status::{GpuData, GpuMemory};
 
 pub fn get_info() -> Vec<GpuData> {
+    let gpus = nvidia();
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    if gpus.is_empty() {
+        return adreno::get_info().into_iter().collect();
+    }
+    gpus
+}
+
+fn nvidia() -> Vec<GpuData> {
     let mut command = Command::new("nvidia-smi");
     command.args([
         "--format=csv,noheader,nounits",
@@ -45,6 +55,109 @@ fn parse_line(line: &str) -> Option<GpuData> {
         usage,
         memory: GpuMemory { free, total },
     })
+}
+
+/// Adreno GPUs on Qualcomm phones. The files are readable from `adb shell` (or
+/// through Shizuku), not from an ordinary app.
+///
+/// There is no VRAM: the GPU shares the device's memory. On Android the memory
+/// is reported as what the GPU uses out of the whole device memory (`dumpsys
+/// gpu`); elsewhere it is unknown (free and total 0).
+#[cfg(any(target_os = "linux", target_os = "android"))]
+mod adreno {
+    use std::{
+        fs,
+        process::Command,
+        sync::Mutex,
+        time::{Duration, Instant},
+    };
+
+    use crate::status::{GpuData, GpuMemory};
+
+    const DIR: &str = "/sys/class/kgsl/kgsl-3d0";
+    /// `dumpsys` takes a few tens of milliseconds; once in a while is enough
+    const MEMORY_INTERVAL: Duration = Duration::from_secs(5);
+
+    pub fn get_info() -> Option<GpuData> {
+        // Busy time and total time since the previous read (reading resets them)
+        let busy = fs::read_to_string(format!("{DIR}/gpubusy")).ok()?;
+        let model = fs::read_to_string(format!("{DIR}/gpu_model")).unwrap_or_default();
+        Some(GpuData {
+            name: name(model.trim()),
+            usage: usage(&busy)?,
+            memory: shared_memory().unwrap_or(GpuMemory { free: 0, total: 0 }),
+        })
+    }
+
+    /// GPU memory in MiB as used / whole device memory.
+    fn shared_memory() -> Option<GpuMemory> {
+        static LAST: Mutex<Option<(Instant, Option<u64>)>> = Mutex::new(None);
+        let used = {
+            let mut last = LAST.lock().ok()?;
+            match *last {
+                Some((at, used)) if at.elapsed() < MEMORY_INTERVAL => used,
+                _ => {
+                    let used = gpu_used_bytes();
+                    *last = Some((Instant::now(), used));
+                    used
+                }
+            }
+        }?;
+        let total = mem_total_kib(&fs::read_to_string("/proc/meminfo").ok()?)? / 1024;
+        let used = used / (1024 * 1024);
+        Some(GpuMemory {
+            free: total.saturating_sub(used),
+            total,
+        })
+    }
+
+    fn gpu_used_bytes() -> Option<u64> {
+        if !crate::android::is_android() {
+            return None;
+        }
+        let output = Command::new("dumpsys")
+            .args(["gpu", "--gpumem"])
+            .output()
+            .ok()?;
+        global_total(&String::from_utf8_lossy(&output.stdout))
+    }
+
+    /// `Global total: 773124096` from `dumpsys gpu --gpumem`.
+    pub(super) fn global_total(dump: &str) -> Option<u64> {
+        dump.lines()
+            .find_map(|l| l.trim().strip_prefix("Global total:"))
+            .and_then(|v| v.trim().parse().ok())
+    }
+
+    /// `MemTotal:       11629912 kB` from `/proc/meminfo`.
+    pub(super) fn mem_total_kib(meminfo: &str) -> Option<u64> {
+        meminfo
+            .lines()
+            .find_map(|l| l.strip_prefix("MemTotal:"))
+            .and_then(|v| v.split_whitespace().next()?.parse().ok())
+    }
+
+    /// `"  23464 1006294"` → 2.33. A powered-down GPU reports `0 0`, which is idle.
+    #[allow(clippy::cast_precision_loss)]
+    pub(super) fn usage(gpubusy: &str) -> Option<f64> {
+        let mut fields = gpubusy.split_whitespace().map(str::parse::<u64>);
+        let busy = fields.next()?.ok()?;
+        let total = fields.next()?.ok()?;
+        Some(if total == 0 {
+            0.0
+        } else {
+            (busy as f64 / total as f64 * 100.0).clamp(0.0, 100.0)
+        })
+    }
+
+    /// `Adreno752v2` → `Adreno 752v2`.
+    pub(super) fn name(model: &str) -> String {
+        match model.strip_prefix("Adreno") {
+            Some(rest) if !rest.is_empty() && !rest.starts_with(' ') => format!("Adreno {rest}"),
+            _ if model.is_empty() => "Adreno".into(),
+            _ => model.into(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -98,5 +211,32 @@ mod tests {
             []
         );
         assert_eq!(parse("GPU, 1, [N/A], [N/A]"), []);
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[test]
+    fn adreno() {
+        use super::adreno::{global_total, mem_total_kib, name, usage};
+        assert_eq!(
+            usage("  23464 1006294"),
+            Some(23464.0 / 1_006_294.0 * 100.0)
+        );
+        assert_eq!(usage("      0       0"), Some(0.0));
+        assert_eq!(usage(""), None);
+        assert_eq!(usage("x 1"), None);
+        assert_eq!(name("Adreno752v2"), "Adreno 752v2");
+        assert_eq!(name("Adreno 740"), "Adreno 740");
+        assert_eq!(name(""), "Adreno");
+        assert_eq!(
+            global_total(
+                "Memory snapshot for GPU 0:\nGlobal total: 773124096\nProc 461 total: 96882688\n"
+            ),
+            Some(773_124_096)
+        );
+        assert_eq!(global_total("Can't find service: gpu\n"), None);
+        assert_eq!(
+            mem_total_kib("MemTotal:       11629912 kB\nMemFree:  1 kB\n"),
+            Some(11_629_912)
+        );
     }
 }

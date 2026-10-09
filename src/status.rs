@@ -115,14 +115,11 @@ impl SystemStatus {
             bytes.saturating_mul(1000).checked_div(millis).unwrap_or(0)
         };
 
-        let os_name = System::name().unwrap_or_else(|| "Unknown OS".into());
-        let os_version = System::os_version()
-            .or_else(System::kernel_version)
-            .unwrap_or_default();
+        let (os_name, os_version, system_hostname) = platform();
         let hostname = identity
             .hostname
             .clone()
-            .or_else(System::host_name)
+            .or(system_hostname)
             .unwrap_or_else(|| "unknown".into());
 
         cfg_if! {
@@ -152,6 +149,17 @@ impl SystemStatus {
             .filter(|d| d.total_space() != 0 && !d.is_read_only())
         {
             let name = disk.name().to_string_lossy().into_owned();
+            // On Android device names like /dev/block/dm-67 mean nothing to the user; show
+            // where it is mounted, and only the user's own storage
+            #[cfg(any(target_os = "linux", target_os = "android"))]
+            let name = if crate::android::is_android() {
+                if !crate::android::is_user_storage(disk.mount_point()) {
+                    continue;
+                }
+                disk.mount_point().to_string_lossy().into_owned()
+            } else {
+                name
+            };
             let (free, total) = (disk.available_space(), disk.total_space());
             if storages
                 .iter()
@@ -160,13 +168,27 @@ impl SystemStatus {
                 continue;
             }
             let usage = disk.usage();
+            let (read, written) = (
+                per_second(usage.read_bytes),
+                per_second(usage.written_bytes),
+            );
+            // Android only gives system-wide totals; they belong to the data partition
+            #[cfg(any(target_os = "linux", target_os = "android"))]
+            let (read, written) = if disk.mount_point() == std::path::Path::new("/data")
+                && let Some(rates) = io.system_io()
+            {
+                rates
+            } else {
+                (read, written)
+            };
             storages.push(StorageData {
-                busy: io.busy(&name),
+                // by the device, not the name shown (a mount point on Android)
+                busy: io.busy(&disk.name().to_string_lossy()),
                 name,
                 free,
                 total,
-                read: per_second(usage.read_bytes),
-                written: per_second(usage.written_bytes),
+                read,
+                written,
             });
         }
 
@@ -193,6 +215,26 @@ impl SystemStatus {
             histories: [],
         }
     }
+}
+
+/// OS name, version and hostname. On Android sysinfo finds no os-release and the
+/// hostname is `localhost`, so they come from the system properties instead.
+fn platform() -> (String, String, Option<String>) {
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    if crate::android::is_android() {
+        return (
+            crate::android::os_name().unwrap_or_else(|| "Android".into()),
+            String::new(),
+            crate::android::device_name().or_else(System::host_name),
+        );
+    }
+    (
+        System::name().unwrap_or_else(|| "Unknown OS".into()),
+        System::os_version()
+            .or_else(System::kernel_version)
+            .unwrap_or_default(),
+        System::host_name(),
+    )
 }
 
 #[cfg(test)]

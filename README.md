@@ -121,6 +121,22 @@ curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | s
 - 止めて消すとき: `launchctl bootout gui/$(id -u)/io.github.zel9278.pcsc-rs` のあと、plist と `~/.local/bin/pcsc-rs` を消します。
 - ブラウザでダウンロードした実行ファイルを直接使うときは、`chmod +x` と `xattr -d com.apple.quarantine <ファイル名>` が必要です（上のコマンドでは不要）。
 
+### Android（試験的）
+
+root なしで、PC から adb で入れます（[scripts/android-adb.sh](scripts/android-adb.sh)）。adb shell の権限で動くので、CPU（コアごと）・GPU（Adreno）・ロードアベレージも取れます。
+
+```sh
+# USB か、無線デバッグ（adb pair / adb connect）でつないでから
+PASS=<PASS> scripts/android-adb.sh install --hostname 表示したい名前
+scripts/android-adb.sh status   # 動いているか
+scripts/android-adb.sh log      # ログ
+scripts/android-adb.sh stop     # 止める
+```
+
+- 端末から切り離して動くので、ケーブルを抜いても、画面を消して省電力（Doze）に入っても止まりません。落ちたとき・自動更新のあとは 5 秒後に起動し直します
+- 端末を再起動すると止まるので、もう一度 `install` してください（2回目からは `PASS` と名前を引き継ぎます）
+- 名前を指定しないと機種名（例: `SH-M28`）になります
+
 ### Nix
 
 [flake](flake.nix) でパッケージと、NixOS・nix-darwin・home-manager 用のモジュール（`services.pcsc-rs`）を配っています。Nix で入れた pcsc-rs は自分では更新せず、`nix flake update` などで更新します。
