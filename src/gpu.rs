@@ -1,10 +1,20 @@
-//! NVIDIA GPU usage through `nvidia-smi`. Anything unexpected means "no GPU".
+//! GPU usage: NVIDIA through `nvidia-smi`, and Qualcomm Adreno (Android) through
+//! the kgsl driver's sysfs files. Anything unexpected means "no GPU".
 
 use std::process::Command;
 
 use crate::status::{GpuData, GpuMemory};
 
 pub fn get_info() -> Vec<GpuData> {
+    let gpus = nvidia();
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    if gpus.is_empty() {
+        return adreno::get_info().into_iter().collect();
+    }
+    gpus
+}
+
+fn nvidia() -> Vec<GpuData> {
     let mut command = Command::new("nvidia-smi");
     command.args([
         "--format=csv,noheader,nounits",
@@ -45,6 +55,51 @@ fn parse_line(line: &str) -> Option<GpuData> {
         usage,
         memory: GpuMemory { free, total },
     })
+}
+
+/// Adreno GPUs on Qualcomm phones. The files are readable from `adb shell` (or
+/// through Shizuku), not from an ordinary app. The memory is shared with the
+/// CPU, so there is no VRAM to report.
+#[cfg(any(target_os = "linux", target_os = "android"))]
+mod adreno {
+    use std::fs;
+
+    use crate::status::{GpuData, GpuMemory};
+
+    const DIR: &str = "/sys/class/kgsl/kgsl-3d0";
+
+    pub fn get_info() -> Option<GpuData> {
+        // Busy time and total time since the previous read (reading resets them)
+        let busy = fs::read_to_string(format!("{DIR}/gpubusy")).ok()?;
+        let model = fs::read_to_string(format!("{DIR}/gpu_model")).unwrap_or_default();
+        Some(GpuData {
+            name: name(model.trim()),
+            usage: usage(&busy)?,
+            memory: GpuMemory { free: 0, total: 0 },
+        })
+    }
+
+    /// `"  23464 1006294"` → 2.33. A powered-down GPU reports `0 0`, which is idle.
+    #[allow(clippy::cast_precision_loss)]
+    pub(super) fn usage(gpubusy: &str) -> Option<f64> {
+        let mut fields = gpubusy.split_whitespace().map(str::parse::<u64>);
+        let busy = fields.next()?.ok()?;
+        let total = fields.next()?.ok()?;
+        Some(if total == 0 {
+            0.0
+        } else {
+            (busy as f64 / total as f64 * 100.0).clamp(0.0, 100.0)
+        })
+    }
+
+    /// `Adreno752v2` → `Adreno 752v2`.
+    pub(super) fn name(model: &str) -> String {
+        match model.strip_prefix("Adreno") {
+            Some(rest) if !rest.is_empty() && !rest.starts_with(' ') => format!("Adreno {rest}"),
+            _ if model.is_empty() => "Adreno".into(),
+            _ => model.into(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -98,5 +153,21 @@ mod tests {
             []
         );
         assert_eq!(parse("GPU, 1, [N/A], [N/A]"), []);
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[test]
+    fn adreno() {
+        use super::adreno::{name, usage};
+        assert_eq!(
+            usage("  23464 1006294"),
+            Some(23464.0 / 1_006_294.0 * 100.0)
+        );
+        assert_eq!(usage("      0       0"), Some(0.0));
+        assert_eq!(usage(""), None);
+        assert_eq!(usage("x 1"), None);
+        assert_eq!(name("Adreno752v2"), "Adreno 752v2");
+        assert_eq!(name("Adreno 740"), "Adreno 740");
+        assert_eq!(name(""), "Adreno");
     }
 }
