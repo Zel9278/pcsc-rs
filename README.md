@@ -36,21 +36,39 @@ HOSTNAME=ホスト名として表示させたい文字列
 
 ## 使い方
 
-Linux と macOS は[コマンド1つ](#linux)で、NixOS などの Nix では [flake](#nix) で入れられます。
+Windows・Linux・macOS は[コマンド1つ](#windows)で、Android は PC から adb で、NixOS などの Nix では [flake](#nix) で入れられます。
 
 ### Windows
 
-1. [リリースページ](https://github.com/Zel9278/pcsc-rs/releases)から使用する環境に合った最新のリリースをダウンロードしてください。
-2. 適当なフォルダに保存し、同じフォルダに `.env` ファイルを作成して以下の Key を追加してください。
+PowerShell で最新のリリースを入れ、タスクスケジューラに登録して起動します（[install.ps1](install.ps1)）。以後の更新は pcsc-rs が自分で行います。
+
+```powershell
+# このユーザーだけ（%LOCALAPPDATA%\pcsc-rs。ログオンしたら起動）
+$env:PASS = "npU7pmkkYfuUdKfqzm2BtDfBPEe4pizrXyPVj8Fby3KaUtehNu3ToDtM8uEdGBr3AS9LRUkZixtZxuKTvsL2e4BVrfzWWG7RqqVThLWsVLHLaJJ8ekeGuHtLBkfZpBtv"; & ([scriptblock]::Create((irm https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.ps1)))
+
+# PC 全体（%ProgramFiles%\pcsc-rs。PC の起動時に SYSTEM として起動）: 管理者の PowerShell で、上の行の最後に -System を付ける
+```
+
+- 表示する名前は `-Hostname 名前`、止めて消すときは `-Uninstall` を最後に付けます。
+- もう一度実行すると、入っている `.env` の `PASS` と設定のまま最新版に入れ直します（`$env:PASS` は省略可）。
+- 確認はタスクスケジューラの「pcsc-rs」（ユーザー版は「pcsc-rs (ユーザー名)」）で。
+
+<details>
+<summary>手動で入れる場合</summary>
+
+1. [リリースページ](https://github.com/Zel9278/pcsc-rs/releases)から最新の `pcsc-rs-…-x86_64-pc-windows-msvc.exe` をダウンロードします。
+2. 適当なフォルダに保存し、同じフォルダに `.env` ファイルを作成して以下の Key を追加します。
 
 ```env
 PASS=npU7pmkkYfuUdKfqzm2BtDfBPEe4pizrXyPVj8Fby3KaUtehNu3ToDtM8uEdGBr3AS9LRUkZixtZxuKTvsL2e4BVrfzWWG7RqqVThLWsVLHLaJJ8ekeGuHtLBkfZpBtv
 ```
 
-3. ダウンロードしたリリースを実行してください。
+3. ダウンロードしたファイルを実行します。
 4. [PC Status](https://pc-stats.eov2.com/)にアクセスし、自分の PC が表示されていれば完了です。
 
 必要に応じて `pcsc-rs.exe` のショートカットを `shell:startup` に追加すれば、PC と同時に起動するようになります。
+
+</details>
 
 ### Linux
 
@@ -131,6 +149,13 @@ PASS=<PASS> scripts/android-adb.sh install --hostname 表示したい名前
 scripts/android-adb.sh status   # 動いているか
 scripts/android-adb.sh log      # ログ
 scripts/android-adb.sh stop     # 止める
+```
+
+Windows の PC からは PowerShell 版（[scripts/android-adb.ps1](scripts/android-adb.ps1)）を使います。
+
+```powershell
+$env:PASS = "<PASS>"; & ([scriptblock]::Create((irm https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/scripts/android-adb.ps1))) install -Hostname 表示したい名前
+# status / log / stop も同じ形で（install の代わりに書く）
 ```
 
 - 端末から切り離して動くので、ケーブルを抜いても、画面を消して省電力（Doze）に入っても止まりません。落ちたとき・自動更新のあとは 5 秒後に起動し直します

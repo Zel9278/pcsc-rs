@@ -45,7 +45,8 @@ case "${1:-install}" in
     if [ -z "$binary" ]; then
       tag=$(curl -fsSL https://api.github.com/repos/Zel9278/pcsc-rs/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
       [ -n "$tag" ] || { echo "最新リリースが取れなかった" >&2; exit 1; }
-      curl -fL --progress-bar -o "$tmp/pcsc-rs" "https://github.com/Zel9278/pcsc-rs/releases/download/$tag/pcsc-rs-$tag-$TARGET"
+      if [ -t 2 ]; then progress=--progress-bar; else progress=-sS; fi
+      curl -fL "$progress" -o "$tmp/pcsc-rs" "https://github.com/Zel9278/pcsc-rs/releases/download/$tag/pcsc-rs-$tag-$TARGET"
       binary=$tmp/pcsc-rs
     fi
 
@@ -76,7 +77,8 @@ while true; do
 done
 LOOP
     adb shell "chmod 755 $DIR/loop.sh"
-    adb shell "cd $DIR && setsid $DIR/loop.sh > pcsc-rs.log 2>&1 < /dev/null &"
+    # サブシェルで起動して、adb shell の sh がすぐ終わるようにする（残ると adb が戻ってこない）
+    adb shell "cd $DIR && (setsid $DIR/loop.sh > pcsc-rs.log 2>&1 < /dev/null &)"
     sleep 4
     adb shell "tail -n 6 $DIR/pcsc-rs.log"
     ;;
