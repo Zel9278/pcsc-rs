@@ -48,6 +48,9 @@ impl Tracker {
         let sensors: Vec<(String, f64)> = components
             .list()
             .iter()
+            // sysinfo's own thermal-zone fallback has no labels and is never refreshed;
+            // zones::read() below reads those properly
+            .filter(|c| !c.label().is_empty())
             .filter_map(|c| Some((c.label().to_owned(), f64::from(c.temperature()?))))
             .collect();
         let latest = parse::components(&sensors);
@@ -120,15 +123,16 @@ mod parse {
                     && !(has_package && label.starts_with("coretemp Core"))
                     && !(has_composite && label.starts_with("nvme Sensor"))
             })
-            .take(MAX_SENSORS)
             .map(|(label, value)| Temperature {
                 // Chips with a single unnamed sensor: `acpitz temp1` → `acpitz`
                 label: label.strip_suffix(" temp1").unwrap_or(label).to_owned(),
                 value: round(*value),
             })
             .collect();
-        // sysinfo lists them in directory order; keep the order stable for the viewer
+        // sysinfo lists them in directory order; keep the order (and which ones are cut off)
+        // stable for the viewer
         out.sort_by(|a, b| a.label.cmp(&b.label));
+        out.truncate(MAX_SENSORS);
         out
     }
 

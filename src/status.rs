@@ -195,9 +195,15 @@ fn storages(disks: &Disks, io: &io::Tracker, interval: Duration) -> Vec<StorageD
     let mut storages: Vec<StorageData> = Vec::new();
     for disk in disks
         .iter()
-        .filter(|d| d.total_space() != 0 && !d.is_read_only())
+        .filter(|d| d.total_space() != 0 && !d.is_read_only() && !is_view(d.file_system()))
     {
         let name = disk.name().to_string_lossy().into_owned();
+        // Every ZFS dataset is a mount with the pool's free space; show the pool once
+        let name = if disk.file_system() == "zfs" {
+            zfs_pool(&name).to_owned()
+        } else {
+            name
+        };
         // On Android device names like /dev/block/dm-67 mean nothing to the user; show
         // where it is mounted, and only the user's own storage
         #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -210,6 +216,16 @@ fn storages(disks: &Disks, io: &io::Tracker, interval: Duration) -> Vec<StorageD
             name
         };
         let (free, total) = (disk.available_space(), disk.total_space());
+        if let Some(pool) = storages.iter_mut().find(|s| s.name == name)
+            && disk.file_system() == "zfs"
+        {
+            // A dataset's size is its own use plus the pool's free space; the biggest is closest
+            if total > pool.total {
+                pool.total = total;
+                pool.free = free;
+            }
+            continue;
+        }
         if storages
             .iter()
             .any(|s| s.name == name && s.free == free && s.total == total)
@@ -241,6 +257,18 @@ fn storages(disks: &Disks, io: &io::Tracker, interval: Duration) -> Vec<StorageD
         });
     }
     storages
+}
+
+/// File systems that show another one's space: Docker's overlay mounts and FUSE mounts
+/// (sshfs, mergerfs, rclone, …). `fuseblk` is a real disk (NTFS, exFAT through FUSE).
+fn is_view(file_system: &std::ffi::OsStr) -> bool {
+    let fs = file_system.to_string_lossy();
+    fs == "overlay" || fs.starts_with("fuse.")
+}
+
+/// `rpool/data/subvol-101-disk-0` → `rpool`
+fn zfs_pool(dataset: &str) -> &str {
+    dataset.split('/').next().unwrap_or(dataset)
 }
 
 fn sensors(thermal: &thermal::Tracker) -> (Option<BatteryData>, Vec<Temperature>) {
@@ -334,6 +362,17 @@ pub(crate) fn sample() -> SystemStatus {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn storage_filters() {
+        use std::ffi::OsStr;
+        assert!(super::is_view(OsStr::new("overlay")));
+        assert!(super::is_view(OsStr::new("fuse.sshfs")));
+        assert!(!super::is_view(OsStr::new("fuseblk")));
+        assert!(!super::is_view(OsStr::new("ext4")));
+        assert_eq!(super::zfs_pool("rpool/data/subvol-101-disk-0"), "rpool");
+        assert_eq!(super::zfs_pool("tank"), "tank");
+    }
+
     #[test]
     fn wire_format() {
         assert_eq!(
