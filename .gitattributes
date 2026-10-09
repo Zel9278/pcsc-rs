@@ -1,1 +1,2 @@
-* text=auto eol=lfandroid/gradlew.bat text eol=crlf
+* text=auto eol=lf
+android/gradlew.bat text eol=crlf
