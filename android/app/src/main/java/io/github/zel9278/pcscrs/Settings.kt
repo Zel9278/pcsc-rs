@@ -11,6 +11,8 @@ data class Settings(
     val uri: String = "",
     val mode: Mode? = null,
     val startOnBoot: Boolean = false,
+    /** Paired with wireless debugging at least once */
+    val paired: Boolean = false,
 ) {
     companion object {
         private const val FILE = "settings"
@@ -23,6 +25,7 @@ data class Settings(
                 uri = p.getString("uri", "").orEmpty(),
                 mode = p.getString("mode", null)?.let { name -> Mode.entries.find { it.name == name } },
                 startOnBoot = p.getBoolean("startOnBoot", false),
+                paired = p.getBoolean("paired", false),
             )
         }
     }
@@ -34,6 +37,7 @@ data class Settings(
             putString("uri", uri)
             putString("mode", mode?.name)
             putBoolean("startOnBoot", startOnBoot)
+            putBoolean("paired", paired)
         }
     }
 }

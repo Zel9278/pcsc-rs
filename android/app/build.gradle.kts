@@ -48,7 +48,6 @@ android {
 
     buildFeatures {
         compose = true
-        aidl = true
         buildConfig = true
     }
 
@@ -88,6 +87,10 @@ dependencies {
     implementation("androidx.core:core-ktx:1.19.1")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
-    implementation("dev.rikka.shizuku:api:13.1.5")
-    implementation("dev.rikka.shizuku:provider:13.1.5")
+    // Connects to this phone's own adbd (wireless debugging): pairing, TLS, and the shell
+    implementation("com.github.MuntashirAkon:libadb-android:3.1.1")
+    // TLS 1.3 and the key export that pairing needs, on every Android version
+    implementation("org.conscrypt:conscrypt-android:2.5.3")
+    // The certificate for the ADB key (the same Bouncy Castle build libadb-android uses)
+    implementation("org.bouncycastle:bcpkix-jdk15to18:1.81")
 }

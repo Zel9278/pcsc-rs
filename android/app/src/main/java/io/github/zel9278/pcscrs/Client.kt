@@ -59,7 +59,7 @@ done
             write("loop.sh", LOOP),
             "chmod 600 .env",
             "chmod 755 pcsc-rs loop.sh",
-            // Leave the files to the shell user too, so adb or Shizuku can take over later
+            // Leave the files to the shell user too, so adb (the script or wireless debugging) can take over later
             if (root) "chown -R 2000:2000 $DIR" else "true",
             "(setsid ./loop.sh > pcsc-rs.log 2>&1 < /dev/null &)",
             "echo started",

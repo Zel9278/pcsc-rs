@@ -1,13 +1,11 @@
 package io.github.zel9278.pcscrs
 
-import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -38,9 +36,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableIntState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -60,29 +56,13 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import rikka.shizuku.Shizuku
 
 class MainActivity : ComponentActivity() {
-    /** Bumped whenever Shizuku's state may have changed, so the screen reads it again */
-    private val shizukuChanges = mutableIntStateOf(0)
-    private val onBinder = Shizuku.OnBinderReceivedListener { shizukuChanges.intValue++ }
-    private val onBinderDead = Shizuku.OnBinderDeadListener { shizukuChanges.intValue++ }
-    private val onPermission = Shizuku.OnRequestPermissionResultListener { _, _ -> shizukuChanges.intValue++ }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AdbShell.init(this)
         enableEdgeToEdge()
-        Shizuku.addBinderReceivedListenerSticky(onBinder)
-        Shizuku.addBinderDeadListener(onBinderDead)
-        Shizuku.addRequestPermissionResultListener(onPermission)
-        setContent { AppTheme { App(shizukuChanges) } }
-    }
-
-    override fun onDestroy() {
-        Shizuku.removeBinderReceivedListener(onBinder)
-        Shizuku.removeBinderDeadListener(onBinderDead)
-        Shizuku.removeRequestPermissionResultListener(onPermission)
-        super.onDestroy()
+        setContent { AppTheme { App() } }
     }
 }
 
@@ -98,15 +78,8 @@ private fun AppTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = colors, content = content)
 }
 
-private fun shizukuInstalled(context: Context) = try {
-    context.packageManager.getPackageInfo("moe.shizuku.privileged.api", 0)
-    true
-} catch (_: PackageManager.NameNotFoundException) {
-    false
-}
-
 @Composable
-private fun App(shizukuChanges: MutableIntState) {
+private fun App() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var settings by remember { mutableStateOf(Settings.load(context)) }
@@ -115,22 +88,53 @@ private fun App(shizukuChanges: MutableIntState) {
         next.save(context)
     }
 
-    val changes = shizukuChanges.intValue
-    val shizuku = remember(changes) { ShizukuShell.state() }
     var rootError by remember { mutableStateOf<String?>(null) }
+    var adb by remember { mutableStateOf<AdbShell.State?>(null) }
     var status by remember { mutableStateOf<Client.Status?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
 
-    // The mode chosen before, if it can still be used. Shizuku is picked by itself once allowed
-    val mode = when {
-        settings.mode == Mode.ROOT -> Mode.ROOT
-        shizuku == ShizukuShell.State.READY -> Mode.SHIZUKU
-        else -> null
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        Pairing.ask(context)
+        Pairing.openSettings(context)
     }
+    fun startPairing() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            Pairing.ask(context)
+            Pairing.openSettings(context)
+        }
+    }
+
+    // A mode that can run commands now
+    val mode = when (settings.mode) {
+        Mode.ROOT -> Mode.ROOT
+        Mode.ADB -> Mode.ADB.takeIf { adb == AdbShell.State.READY }
+        null -> null
+    }
+
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    // Wireless debugging: (re)connect while the screen is shown; it drops when it is switched off or Wi-Fi changes
+    LaunchedEffect(settings.mode) {
+        if (settings.mode != Mode.ADB) return@LaunchedEffect
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                val state = AdbShell.connect(3_000)
+                adb = state
+                if (state == AdbShell.State.READY) {
+                    Pairing.cancel(context)
+                    if (!settings.paired) update(settings.copy(paired = true))
+                    // While connected, let the app switch wireless debugging on by itself later
+                    AdbShell.grantSwitch(context)
+                }
+                delay(if (state == AdbShell.State.READY) 10_000 else 4_000)
+            }
+        }
+    }
+
     LaunchedEffect(mode) {
         if (mode == null) return@LaunchedEffect
-        if (settings.mode != mode) update(settings.copy(mode = mode))
         // First time: take PASS and the name from a client installed earlier (adb script)
         if (settings.pass.isEmpty()) {
             val env = Client.installedEnv(mode.shell())
@@ -149,12 +153,11 @@ private fun App(shizukuChanges: MutableIntState) {
     }
 
     // Check the client every 3 seconds while the screen is shown
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(mode) {
         val shell = mode?.shell() ?: return@LaunchedEffect
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             while (true) {
-                status = Client.status(shell)
+                Client.status(shell)?.let { status = it }
                 delay(3_000)
             }
         }
@@ -165,7 +168,7 @@ private fun App(shizukuChanges: MutableIntState) {
         scope.launch {
             val result = block()
             if (!result.ok) message = context.getString(R.string.failed, result.output.ifBlank { "exit ${result.code}" })
-            mode?.let { status = Client.status(it.shell()) }
+            mode?.let { m -> Client.status(m.shell())?.let { status = it } }
             busy = false
         }
     }
@@ -186,7 +189,41 @@ private fun App(shizukuChanges: MutableIntState) {
             Section(stringResource(R.string.access_title)) {
                 Text(stringResource(R.string.access_explain), style = MaterialTheme.typography.bodySmall)
                 ModeOption(
-                    selected = mode == Mode.ROOT,
+                    selected = settings.mode == Mode.ADB,
+                    label = stringResource(R.string.use_adb),
+                    onSelect = { update(settings.copy(mode = Mode.ADB)) },
+                )
+                if (settings.mode == Mode.ADB) {
+                    val small = MaterialTheme.typography.bodySmall
+                    when {
+                        !AdbShell.hasWirelessDebugging && adb != AdbShell.State.READY ->
+                            Text(stringResource(R.string.adb_old_android), style = small)
+                        adb == AdbShell.State.READY -> Text(stringResource(R.string.adb_ready))
+                        adb == AdbShell.State.NEEDS_PAIRING || (adb == AdbShell.State.OFF && !settings.paired) -> {
+                            Text(stringResource(R.string.adb_needs_pairing))
+                            Text(stringResource(R.string.adb_steps), style = small)
+                            Button(onClick = ::startPairing) { Text(stringResource(R.string.adb_pair)) }
+                        }
+                        adb == AdbShell.State.OFF -> {
+                            Text(stringResource(R.string.adb_off))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (AdbShell.canSwitch(context)) {
+                                    Button(onClick = {
+                                        AdbShell.switchOn(context)
+                                        scope.launch { adb = AdbShell.connect(8_000) }
+                                    }) { Text(stringResource(R.string.adb_switch_on)) }
+                                }
+                                OutlinedButton(onClick = { Pairing.openSettings(context) }) {
+                                    Text(stringResource(R.string.adb_open_settings))
+                                }
+                                TextButton(onClick = ::startPairing) { Text(stringResource(R.string.adb_pair)) }
+                            }
+                        }
+                    }
+                    if (AdbShell.hasWirelessDebugging) Text(stringResource(R.string.adb_wifi), style = small)
+                }
+                ModeOption(
+                    selected = settings.mode == Mode.ROOT,
                     label = if (settings.mode == Mode.ROOT) stringResource(R.string.root_ok) else stringResource(R.string.use_root),
                     onSelect = {
                         scope.launch {
@@ -201,33 +238,6 @@ private fun App(shizukuChanges: MutableIntState) {
                     },
                 )
                 rootError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-                ModeOption(
-                    selected = mode == Mode.SHIZUKU,
-                    enabled = shizuku == ShizukuShell.State.READY,
-                    label = when (shizuku) {
-                        ShizukuShell.State.READY -> stringResource(R.string.shizuku_ready)
-                        ShizukuShell.State.NEEDS_PERMISSION -> stringResource(R.string.shizuku_needs_permission)
-                        ShizukuShell.State.DENIED -> stringResource(R.string.shizuku_denied)
-                        ShizukuShell.State.UNSUPPORTED -> stringResource(R.string.shizuku_unsupported)
-                        ShizukuShell.State.NOT_RUNNING -> stringResource(R.string.shizuku_not_running)
-                    },
-                    onSelect = { update(settings.copy(mode = Mode.SHIZUKU)) },
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (shizuku == ShizukuShell.State.NEEDS_PERMISSION) {
-                        Button(onClick = { Shizuku.requestPermission(ShizukuShell.PERMISSION_REQUEST) }) {
-                            Text(stringResource(R.string.allow))
-                        }
-                    }
-                    if (shizuku == ShizukuShell.State.NOT_RUNNING && !shizukuInstalled(context)) {
-                        TextButton(onClick = {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://shizuku.rikka.app/")))
-                        }) { Text(stringResource(R.string.get_shizuku)) }
-                    }
-                }
-                if (mode == null && shizuku != ShizukuShell.State.NEEDS_PERMISSION) {
-                    Text(stringResource(R.string.no_access), style = MaterialTheme.typography.bodySmall)
-                }
             }
 
             if (mode != null) {
@@ -275,8 +285,8 @@ private fun App(shizukuChanges: MutableIntState) {
                     Text(stringResource(R.string.start_on_boot), Modifier.weight(1f))
                     Switch(checked = settings.startOnBoot, onCheckedChange = { update(settings.copy(startOnBoot = it)) })
                 }
-                if (mode == Mode.SHIZUKU) {
-                    Text(stringResource(R.string.start_on_boot_shizuku), style = MaterialTheme.typography.bodySmall)
+                if (settings.mode == Mode.ADB) {
+                    Text(stringResource(R.string.start_on_boot_adb), style = MaterialTheme.typography.bodySmall)
                 }
             }
 

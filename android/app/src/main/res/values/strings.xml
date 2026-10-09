@@ -4,19 +4,30 @@
     <string name="subtitle">PC Status client for this phone</string>
 
     <string name="access_title">Access</string>
-    <string name="access_explain">The client reads CPU and GPU usage the way adb shell can, so it needs root or Shizuku.</string>
+    <string name="access_explain">The client reads CPU and GPU usage the way adb shell can, so it runs with root or through this phone\'s own wireless debugging (no root needed).</string>
     <string name="use_root">Use root</string>
-    <string name="use_shizuku">Use Shizuku</string>
     <string name="root_ok">Root: granted</string>
     <string name="root_failed">Root was not granted: %1$s</string>
-    <string name="shizuku_not_running">Shizuku is not running. Start it in the Shizuku app.</string>
-    <string name="shizuku_unsupported">This Shizuku is too old (v11 or later is needed).</string>
-    <string name="shizuku_needs_permission">Shizuku: allow this app</string>
-    <string name="shizuku_denied">Shizuku: denied. Allow it in the Shizuku app.</string>
-    <string name="shizuku_ready">Shizuku: allowed</string>
-    <string name="allow">Allow</string>
-    <string name="get_shizuku">Get Shizuku</string>
-    <string name="no_access">Neither root nor Shizuku is available. Install Shizuku (no root needed on Android 11 and later, with wireless debugging), or root the phone.</string>
+
+    <string name="use_adb">Wireless debugging (no root needed)</string>
+    <string name="adb_ready">Wireless debugging: connected</string>
+    <string name="adb_needs_pairing">Wireless debugging: pair this app first</string>
+    <string name="adb_off">Wireless debugging is off (or the phone is not on Wi-Fi)</string>
+    <string name="adb_old_android">This Android has no wireless debugging. Run `adb tcpip 5555` once from a PC (again after every restart).</string>
+    <string name="adb_pair">Pair</string>
+    <string name="adb_switch_on">Turn on wireless debugging</string>
+    <string name="adb_open_settings">Open settings</string>
+    <string name="adb_steps">1. Developer options → Wireless debugging: turn it on\n2. Tap “Pair device with pairing code”\n3. Type the 6-digit code into this app’s notification</string>
+    <string name="adb_wifi">Wireless debugging needs Wi-Fi. The first time on each network, allow it on that network (“Always allow”).</string>
+    <string name="pairing_channel">Pairing</string>
+    <string name="pairing_title">Pair with wireless debugging</string>
+    <string name="pairing_text">Open “Pair device with pairing code” and type the code here</string>
+    <string name="pairing_code">Pairing code</string>
+    <string name="pairing_enter">Enter code</string>
+    <string name="pairing_failed">Pairing failed (%1$s). Try again.</string>
+    <string name="pairing_done">Paired</string>
+    <string name="pairing_done_text">pcsc-rs can use wireless debugging now</string>
+    <string name="start_on_boot_adb">The phone has to be on a Wi-Fi network where wireless debugging was allowed. The app turns wireless debugging on to start the client and back off.</string>
 
     <string name="status_title">Client</string>
     <string name="status_running">Running</string>
@@ -39,7 +50,6 @@
     <string name="uri_hint">Default: PC Status</string>
     <string name="no_quote">Cannot contain \' or a line break</string>
     <string name="start_on_boot">Start after the phone restarts</string>
-    <string name="start_on_boot_shizuku">With Shizuku this works only when Shizuku also starts on boot (Sui, or root).</string>
     <string name="imported">Loaded the settings of the client already on this phone</string>
 
     <string name="log_title">Log</string>
