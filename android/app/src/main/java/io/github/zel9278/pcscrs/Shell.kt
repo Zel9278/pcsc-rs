@@ -19,6 +19,9 @@ enum class Mode {
 
     /** This phone's own adbd over wireless debugging: the shell user, no root needed */
     ADB,
+
+    /** Shizuku's process (the shell user when Shizuku was started with adb) */
+    SHIZUKU,
 }
 
 interface PrivilegedShell {
@@ -87,6 +90,7 @@ object RootShell : PrivilegedShell {
 fun Mode.shell(): PrivilegedShell = when (this) {
     Mode.ROOT -> RootShell
     Mode.ADB -> AdbShell
+    Mode.SHIZUKU -> ShizukuShell
 }
 
 // Process.isAlive needs API 26

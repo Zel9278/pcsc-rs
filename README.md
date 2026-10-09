@@ -145,14 +145,20 @@ curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | s
 
 ### Android（試験的）
 
-#### アプリ（root か Shizuku）
+#### アプリ（ワイヤレスデバッグ・Shizuku・root）
 
-root 化した端末か、[Shizuku](https://shizuku.rikka.app/) が動いている端末なら、アプリで入れられます。[Releases](https://github.com/Zel9278/pcsc-rs/releases/latest) の `pcsc-rs-<バージョン>-android.apk`（arm64）を入れて開き、root か Shizuku を選んで、PASS を入れて「開始」を押します。
+[Releases](https://github.com/Zel9278/pcsc-rs/releases/latest) の `pcsc-rs-<バージョン>-android.apk`（arm64）を入れて開き、動かし方を選んで、PASS を入れて「開始」を押します。動かし方は次の3つから選べます。
 
-- 動かし方は下の adb 版と同じで、`/data/local/tmp/pcsc-rs` に置いて端末から切り離して動かします。アプリを閉じても動き続けます
+| 動かし方 | 要るもの | 向いている場合 |
+|---|---|---|
+| ワイヤレスデバッグ | Android 11 以降・Wi-Fi。最初に一度だけペアリングする（コードは通知に入力） | root も Shizuku も無い |
+| Shizuku | [Shizuku](https://shizuku.rikka.app/) が動いていること | もう Shizuku を使っている。一度起動すれば、再起動まで Wi-Fi なしで操作できる |
+| root | root 化した端末 | 再起動後の自動開始を確実にしたい |
+
+- 動かし方は下の adb 版と同じで、`/data/local/tmp/pcsc-rs` に置いて端末から切り離して動かします。アプリを閉じても、Wi-Fi が切れても動き続けます
 - adb 版で入れていたときは、PASS と名前をそのまま読み込みます
-- 「スマホの再起動後に自動で開始」を入れると、再起動のあとに自分で起動し直します（Shizuku の場合は、Shizuku も起動時に動く（Sui や root）ときだけ）
-- Shizuku は Android 11 以降なら無線デバッグで root なしで動かせます。ただし端末を再起動すると Shizuku も止まるので、そのたびに Shizuku を起動してからアプリで「開始」を押します
+- ワイヤレスデバッグは、ペアリングしたあとはアプリが自分でオンにできます（ネットワークごとに初回だけ「このネットワークで常に許可」が要ります）
+- 「スマホの再起動後に自動で開始」: root はそのまま、ワイヤレスデバッグは許可済みの Wi-Fi につながっていれば、Shizuku は Shizuku も起動時に動く（Sui や root）ときだけ効きます
 
 自分でビルドするときは [android/README.md](android/README.md) を見てください。
 

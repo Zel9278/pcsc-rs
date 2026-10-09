@@ -28,6 +28,18 @@
     <string name="pairing_done_text">pcsc-rs がワイヤレスデバッグを使えるようになりました</string>
     <string name="start_on_boot_adb">ワイヤレスデバッグを許可したことのある Wi-Fi につながっている必要があります。開始のときだけアプリがワイヤレスデバッグをオンにして、終わったら戻します。</string>
 
+    <string name="use_shizuku">Shizuku</string>
+    <string name="shizuku_not_installed">Shizuku が入っていません。</string>
+    <string name="shizuku_not_running">Shizuku が動いていません。Shizuku のアプリで起動してください。</string>
+    <string name="shizuku_unsupported">Shizuku が古すぎます（v11 以降が必要）。</string>
+    <string name="shizuku_needs_permission">Shizuku: このアプリを許可してください</string>
+    <string name="shizuku_denied">Shizuku: 拒否されています。Shizuku のアプリで許可してください。</string>
+    <string name="shizuku_ready">Shizuku: 許可済み</string>
+    <string name="allow">許可する</string>
+    <string name="get_shizuku">Shizuku を入手</string>
+    <string name="shizuku_note">Shizuku は一度起動すれば、スマホを再起動するまで Wi-Fi なしでも使えます。</string>
+    <string name="start_on_boot_shizuku">Shizuku の場合は、Shizuku 自体が起動時に動くとき（Sui や root）だけ効きます。</string>
+
     <string name="status_title">クライアント</string>
     <string name="status_running">動作中</string>
     <string name="status_stopped">停止中</string>

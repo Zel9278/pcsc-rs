@@ -29,6 +29,14 @@ class BootReceiver : BroadcastReceiver() {
                 when (mode) {
                     Mode.ROOT -> Client.start(context, RootShell, settings, root = true)
                     Mode.ADB -> startOverAdb(context, settings)
+                    Mode.SHIZUKU -> {
+                        // Only when Shizuku starts on boot too (Sui, or started by root)
+                        val ready = withTimeoutOrNull(25_000) {
+                            while (ShizukuShell.state() != ShizukuShell.State.READY) delay(1_000)
+                            true
+                        } == true
+                        if (ready) Client.start(context, ShizukuShell, settings, root = false)
+                    }
                 }
             } finally {
                 pending.finish()

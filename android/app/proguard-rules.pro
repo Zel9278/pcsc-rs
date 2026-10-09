@@ -5,3 +5,5 @@
 -dontwarn org.bouncycastle.**
 # Native SPAKE2 for pairing
 -keep class io.github.muntashirakon.crypto.** { *; }
+# Shizuku starts the user service by its class name
+-keep class io.github.zel9278.pcscrs.ShellService { <init>(...); }

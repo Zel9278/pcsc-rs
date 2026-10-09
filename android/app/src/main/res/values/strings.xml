@@ -29,6 +29,18 @@
     <string name="pairing_done_text">pcsc-rs can use wireless debugging now</string>
     <string name="start_on_boot_adb">The phone has to be on a Wi-Fi network where wireless debugging was allowed. The app turns wireless debugging on to start the client and back off.</string>
 
+    <string name="use_shizuku">Shizuku</string>
+    <string name="shizuku_not_installed">Shizuku is not installed.</string>
+    <string name="shizuku_not_running">Shizuku is not running. Start it in the Shizuku app.</string>
+    <string name="shizuku_unsupported">This Shizuku is too old (v11 or later is needed).</string>
+    <string name="shizuku_needs_permission">Shizuku: allow this app</string>
+    <string name="shizuku_denied">Shizuku: denied. Allow it in the Shizuku app.</string>
+    <string name="shizuku_ready">Shizuku: allowed</string>
+    <string name="allow">Allow</string>
+    <string name="get_shizuku">Get Shizuku</string>
+    <string name="shizuku_note">Once started, Shizuku keeps working without Wi-Fi, until the phone restarts.</string>
+    <string name="start_on_boot_shizuku">With Shizuku this works only when Shizuku also starts on boot (Sui, or root).</string>
+
     <string name="status_title">Client</string>
     <string name="status_running">Running</string>
     <string name="status_stopped">Stopped</string>

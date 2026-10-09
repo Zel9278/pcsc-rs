@@ -48,6 +48,7 @@ android {
 
     buildFeatures {
         compose = true
+        aidl = true
         buildConfig = true
     }
 
@@ -91,6 +92,9 @@ dependencies {
     implementation("com.github.MuntashirAkon:libadb-android:3.1.1")
     // TLS 1.3 and the key export that pairing needs, on every Android version
     implementation("org.conscrypt:conscrypt-android:2.5.3")
+    // Or through Shizuku, when it is running
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
     // The certificate for the ADB key (the same Bouncy Castle build libadb-android uses)
     implementation("org.bouncycastle:bcpkix-jdk15to18:1.81")
 }

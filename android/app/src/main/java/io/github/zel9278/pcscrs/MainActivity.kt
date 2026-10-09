@@ -1,5 +1,7 @@
 package io.github.zel9278.pcscrs
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -36,7 +38,9 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableIntState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -56,13 +60,30 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import rikka.shizuku.Shizuku
 
 class MainActivity : ComponentActivity() {
+    /** Bumped whenever Shizuku's state may have changed, so the screen reads it again */
+    private val shizukuChanges = mutableIntStateOf(0)
+    private val onBinder = Shizuku.OnBinderReceivedListener { shizukuChanges.intValue++ }
+    private val onBinderDead = Shizuku.OnBinderDeadListener { shizukuChanges.intValue++ }
+    private val onPermission = Shizuku.OnRequestPermissionResultListener { _, _ -> shizukuChanges.intValue++ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AdbShell.init(this)
         enableEdgeToEdge()
-        setContent { AppTheme { App() } }
+        Shizuku.addBinderReceivedListenerSticky(onBinder)
+        Shizuku.addBinderDeadListener(onBinderDead)
+        Shizuku.addRequestPermissionResultListener(onPermission)
+        setContent { AppTheme { App(shizukuChanges) } }
+    }
+
+    override fun onDestroy() {
+        Shizuku.removeBinderReceivedListener(onBinder)
+        Shizuku.removeBinderDeadListener(onBinderDead)
+        Shizuku.removeRequestPermissionResultListener(onPermission)
+        super.onDestroy()
     }
 }
 
@@ -79,7 +100,7 @@ private fun AppTheme(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun App() {
+private fun App(shizukuChanges: MutableIntState) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var settings by remember { mutableStateOf(Settings.load(context)) }
@@ -88,6 +109,8 @@ private fun App() {
         next.save(context)
     }
 
+    val changes = shizukuChanges.intValue
+    val shizuku = remember(changes) { ShizukuShell.state() }
     var rootError by remember { mutableStateOf<String?>(null) }
     var adb by remember { mutableStateOf<AdbShell.State?>(null) }
     var status by remember { mutableStateOf<Client.Status?>(null) }
@@ -111,7 +134,12 @@ private fun App() {
     val mode = when (settings.mode) {
         Mode.ROOT -> Mode.ROOT
         Mode.ADB -> Mode.ADB.takeIf { adb == AdbShell.State.READY }
+        Mode.SHIZUKU -> Mode.SHIZUKU.takeIf { shizuku == ShizukuShell.State.READY }
         null -> null
+    }
+    // Nothing chosen yet and Shizuku already allowed: use it
+    LaunchedEffect(shizuku) {
+        if (settings.mode == null && shizuku == ShizukuShell.State.READY) update(settings.copy(mode = Mode.SHIZUKU))
     }
 
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -223,6 +251,35 @@ private fun App() {
                     if (AdbShell.hasWirelessDebugging) Text(stringResource(R.string.adb_wifi), style = small)
                 }
                 ModeOption(
+                    selected = settings.mode == Mode.SHIZUKU,
+                    label = stringResource(R.string.use_shizuku),
+                    onSelect = { update(settings.copy(mode = Mode.SHIZUKU)) },
+                )
+                if (settings.mode == Mode.SHIZUKU) {
+                    val installed = shizukuInstalled(context)
+                    Text(
+                        when (shizuku) {
+                            ShizukuShell.State.READY -> stringResource(R.string.shizuku_ready)
+                            ShizukuShell.State.NEEDS_PERMISSION -> stringResource(R.string.shizuku_needs_permission)
+                            ShizukuShell.State.DENIED -> stringResource(R.string.shizuku_denied)
+                            ShizukuShell.State.UNSUPPORTED -> stringResource(R.string.shizuku_unsupported)
+                            ShizukuShell.State.NOT_RUNNING ->
+                                stringResource(if (installed) R.string.shizuku_not_running else R.string.shizuku_not_installed)
+                        },
+                    )
+                    if (shizuku == ShizukuShell.State.NEEDS_PERMISSION) {
+                        Button(onClick = { Shizuku.requestPermission(ShizukuShell.PERMISSION_REQUEST) }) {
+                            Text(stringResource(R.string.allow))
+                        }
+                    }
+                    if (shizuku == ShizukuShell.State.NOT_RUNNING && !installed) {
+                        TextButton(onClick = {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://shizuku.rikka.app/")))
+                        }) { Text(stringResource(R.string.get_shizuku)) }
+                    }
+                    Text(stringResource(R.string.shizuku_note), style = MaterialTheme.typography.bodySmall)
+                }
+                ModeOption(
                     selected = settings.mode == Mode.ROOT,
                     label = if (settings.mode == Mode.ROOT) stringResource(R.string.root_ok) else stringResource(R.string.use_root),
                     onSelect = {
@@ -285,8 +342,10 @@ private fun App() {
                     Text(stringResource(R.string.start_on_boot), Modifier.weight(1f))
                     Switch(checked = settings.startOnBoot, onCheckedChange = { update(settings.copy(startOnBoot = it)) })
                 }
-                if (settings.mode == Mode.ADB) {
-                    Text(stringResource(R.string.start_on_boot_adb), style = MaterialTheme.typography.bodySmall)
+                when (settings.mode) {
+                    Mode.ADB -> Text(stringResource(R.string.start_on_boot_adb), style = MaterialTheme.typography.bodySmall)
+                    Mode.SHIZUKU -> Text(stringResource(R.string.start_on_boot_shizuku), style = MaterialTheme.typography.bodySmall)
+                    else -> {}
                 }
             }
 
