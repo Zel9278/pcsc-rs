@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.0](https://github.com/Zel9278/pcsc-rs/compare/v2.2.0...v2.3.0) (2026-10-09)
+
+
+### Features
+
+* run on Android (adb), report Adreno GPU ([#666](https://github.com/Zel9278/pcsc-rs/issues/666)) ([90942a4](https://github.com/Zel9278/pcsc-rs/commit/90942a4200c08950694913d67dc40fbf96fae2d4))
+
 ## [2.2.0](https://github.com/Zel9278/pcsc-rs/compare/v2.1.0...v2.2.0) (2026-10-08)
 
 
