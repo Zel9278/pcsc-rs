@@ -1,7 +1,12 @@
 //! GPU usage: NVIDIA through `nvidia-smi`, and phone GPUs (Qualcomm Adreno,
 //! Samsung's Mali / Xclipse) through sysfs. Anything unexpected means "no GPU".
 
-use std::process::Command;
+use std::{
+    io::ErrorKind,
+    process::Command,
+    sync::Mutex,
+    time::{Duration, Instant},
+};
 
 use crate::status::{GpuData, GpuMemory};
 
@@ -14,7 +19,20 @@ pub fn get_info() -> Vec<GpuData> {
     gpus
 }
 
+/// Without `nvidia-smi`, look for it again only this often. Trying every second costs a
+/// process each time, and with glibc the failed child's SIGCHLD can interrupt the socket
+/// read (#674).
+const NVIDIA_SMI_RETRY: Duration = Duration::from_secs(300);
+
 fn nvidia() -> Vec<GpuData> {
+    static MISSING_SINCE: Mutex<Option<Instant>> = Mutex::new(None);
+    let mut missing = MISSING_SINCE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if missing.is_some_and(|since| since.elapsed() < NVIDIA_SMI_RETRY) {
+        return Vec::new();
+    }
+
     let mut command = Command::new("nvidia-smi");
     command.args([
         "--format=csv,noheader,nounits",
@@ -28,7 +46,12 @@ fn nvidia() -> Vec<GpuData> {
         command.creation_flags(CREATE_NO_WINDOW);
     }
 
-    match command.output() {
+    let output = command.output();
+    *missing = match &output {
+        Err(e) if e.kind() == ErrorKind::NotFound => Some(Instant::now()),
+        _ => None,
+    };
+    match output {
         Ok(output) if output.status.success() => parse(&String::from_utf8_lossy(&output.stdout)),
         _ => Vec::new(),
     }
