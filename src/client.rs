@@ -6,7 +6,12 @@
 //! the latest status. A `Close` from the server means it refused us (a wrong
 //! password, or a client with the same hostname is already connected).
 
-use std::{net::TcpStream, thread, time::Duration};
+use std::{
+    io::{ErrorKind, Read, Write},
+    net::TcpStream,
+    thread,
+    time::Duration,
+};
 
 use serde::{Deserialize, Serialize};
 use tungstenite::{Message, WebSocket, stream::MaybeTlsStream};
@@ -89,7 +94,7 @@ fn session(config: &Config, status: &SharedStatus) -> tungstenite::Result<End> {
 
     let mut registered = false;
     loop {
-        let message = match socket.read() {
+        let message = match read(&mut socket) {
             Ok(message) => message,
             Err(tungstenite::Error::ConnectionClosed | tungstenite::Error::AlreadyClosed) => {
                 return Ok(End::Lost(registered));
@@ -131,9 +136,31 @@ fn session(config: &Config, status: &SharedStatus) -> tungstenite::Result<End> {
     }
 }
 
-fn send(socket: &mut Socket, message: &ClientMessage) -> tungstenite::Result<()> {
+/// A signal can interrupt a blocking read or write (EINTR). The connection is fine; try again.
+fn is_interrupted(e: &tungstenite::Error) -> bool {
+    matches!(e, tungstenite::Error::Io(io) if io.kind() == ErrorKind::Interrupted)
+}
+
+fn read<S: Read + Write>(socket: &mut WebSocket<S>) -> tungstenite::Result<Message> {
+    loop {
+        match socket.read() {
+            Err(e) if is_interrupted(&e) => {}
+            result => return result,
+        }
+    }
+}
+
+fn send<S: Read + Write>(
+    socket: &mut WebSocket<S>,
+    message: &ClientMessage,
+) -> tungstenite::Result<()> {
     let json = serde_json::to_string(message).expect("the status always serializes");
-    socket.send(Message::text(json))
+    let mut result = socket.send(Message::text(json));
+    // The frame is already queued; finish writing it
+    while result.as_ref().is_err_and(is_interrupted) {
+        result = socket.flush();
+    }
+    result
 }
 
 fn set_read_timeout(socket: &Socket) -> std::io::Result<()> {
@@ -150,8 +177,68 @@ fn set_read_timeout(socket: &Socket) -> std::io::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ClientMessage, ServerMessage, parse};
+    use std::io::{self, ErrorKind, Read, Write};
+
+    use tungstenite::{Message, WebSocket, protocol::Role};
+
+    use super::{ClientMessage, ServerMessage, parse, read, send};
     use crate::status;
+
+    /// A stream whose first read and first write are interrupted by a signal.
+    struct Interrupting {
+        input: io::Cursor<Vec<u8>>,
+        output: Vec<u8>,
+        read_interrupted: bool,
+        write_interrupted: bool,
+    }
+
+    impl Read for Interrupting {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            if !self.read_interrupted {
+                self.read_interrupted = true;
+                return Err(ErrorKind::Interrupted.into());
+            }
+            self.input.read(buf)
+        }
+    }
+
+    impl Write for Interrupting {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            if !self.write_interrupted {
+                self.write_interrupted = true;
+                return Err(ErrorKind::Interrupted.into());
+            }
+            self.output.write(buf)
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn retries_after_eintr() {
+        // An unmasked text frame from the server: {"type":"Hi"}
+        let payload = br#"{"type":"Hi"}"#;
+        let mut frame = vec![0x81, u8::try_from(payload.len()).unwrap()];
+        frame.extend_from_slice(payload);
+        let stream = Interrupting {
+            input: io::Cursor::new(frame),
+            output: Vec::new(),
+            read_interrupted: false,
+            write_interrupted: false,
+        };
+        let mut socket = WebSocket::from_raw_socket(stream, Role::Client, None);
+
+        assert_eq!(
+            read(&mut socket).unwrap(),
+            Message::text(r#"{"type":"Hi"}"#)
+        );
+
+        let status = status::sample();
+        send(&mut socket, &ClientMessage::Sync(&status)).unwrap();
+        assert_ne!(socket.get_ref().output.len(), 0);
+    }
 
     #[test]
     fn client_messages() {
