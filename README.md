@@ -177,9 +177,10 @@ $env:PASS = "<PASS>"; & ([scriptblock]::Create((irm https://raw.githubuserconten
 # flake.nix
 {
   inputs.pcsc-rs.url = "github:Zel9278/pcsc-rs";
-  inputs.pcsc-rs.inputs.nixpkgs.follows = "nixpkgs";
 }
 ```
+
+`inputs.pcsc-rs.inputs.nixpkgs.follows = "nixpkgs"` は付けないでください。pcsc-rs のビルドには Rust 1.98 以降が要り、安定版の nixpkgs（NixOS 26.05 は 1.95）ではビルドできません。
 
 ```nix
 # NixOS（systemd のサービス）: nixosConfigurations.<host>.modules に pcsc-rs.nixosModules.default

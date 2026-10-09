@@ -15,6 +15,15 @@ in
   config = lib.mkIf cfg.enable {
     assertions = helpers.assertions "services.pcsc-rs" cfg;
 
+    # A fixed user, not DynamicUser: DynamicUser makes the whole file system read-only for the
+    # service, and the client leaves read-only mounts out, so no disk would be listed
+    users.users.pcsc-rs = {
+      isSystemUser = true;
+      group = "pcsc-rs";
+      description = "PC Status client";
+    };
+    users.groups.pcsc-rs = { };
+
     systemd.services.pcsc-rs = {
       description = "PC Status client";
       wantedBy = [ "multi-user.target" ];
@@ -29,9 +38,9 @@ in
         Restart = "always";
         RestartSec = 5;
         # Only reads /proc, /sys and disk usage; no need for root
-        DynamicUser = true;
+        User = "pcsc-rs";
+        Group = "pcsc-rs";
         NoNewPrivileges = true;
-        ProtectHome = "read-only";
       };
     };
   };
