@@ -5,7 +5,8 @@
 #   scripts/android-adb.sh install                2回目以降は、入っている PASS のまま入れ直す
 #   scripts/android-adb.sh install --binary <file> 手元でビルドしたものを入れる
 #   scripts/android-adb.sh install --hostname <名前> PC Status に出す名前（既定は機種名。例: SH-M28）
-#   scripts/android-adb.sh stop | status | log
+#   scripts/android-adb.sh stop | status | log [行数]
+#   … --adb <adb の場所>（または環境変数 ADB）で、PATH に無い adb を使う
 #
 # adb shell の権限で動くので、CPU（コアごと）・GPU（Adreno）・ロードアベレージも取れる。
 # 端末から切り離して動かすので、ケーブルを抜いても・画面を消して Doze に入っても止まらない。
@@ -17,23 +18,39 @@ set -eu
 DIR=/data/local/tmp/pcsc-rs
 TARGET=aarch64-unknown-linux-musl
 
+command=install
+binary=
+hostname=
+lines=30
+adb_bin=${ADB:-adb}
+while [ $# -gt 0 ]; do
+  case "$1" in
+    install | stop | status | log) command=$1; shift ;;
+    --binary) binary=${2:?--binary にファイルを指定して}; shift 2 ;;
+    --hostname) hostname=${2:?--hostname に名前を指定して}; shift 2 ;;
+    --adb) adb_bin=${2:?--adb に adb の場所を指定して}; shift 2 ;;
+    [0-9]*) lines=$1; shift ;;
+    *)
+      echo "使い方: $0 [install [--binary <file>] [--hostname <名前>] | stop | status | log [行数]] [--adb <adb の場所>]" >&2
+      exit 1
+      ;;
+  esac
+done
+
+if ! command -v "$adb_bin" >/dev/null 2>&1; then
+  echo "adb が見つからない: $adb_bin（--adb か環境変数 ADB で場所を指定して）" >&2
+  exit 1
+fi
+# 以下の adb はすべて、指定された adb を呼ぶ（command で関数自身を呼ばないようにする）
+adb() { command "$adb_bin" "$@"; }
+
 stop_remote() {
   # ループ（PID はループ自身が loop.pid に書く）を先に止めてから、本体を止める
   adb shell "test -f $DIR/loop.pid && kill \$(cat $DIR/loop.pid) 2>/dev/null; rm -f $DIR/loop.pid; pkill -x pcsc-rs 2>/dev/null; true"
 }
 
-case "${1:-install}" in
+case "$command" in
   install)
-    shift || true
-    binary=
-    hostname=
-    while [ $# -gt 0 ]; do
-      case "$1" in
-        --binary) binary=${2:?--binary にファイルを指定して}; shift 2 ;;
-        --hostname) hostname=${2:?--hostname に名前を指定して}; shift 2 ;;
-        *) echo "知らないオプション: $1" >&2; exit 1 ;;
-      esac
-    done
 
     case "$(adb shell uname -m | tr -d '\r')" in
       aarch64) ;;
@@ -90,10 +107,6 @@ LOOP
     adb shell "ps -A -o PID,USER,ETIME,ARGS | grep -E '^ *PID|pcsc-rs' | grep -v grep" || echo "動いていない"
     ;;
   log)
-    adb shell "tail -n ${2:-30} $DIR/pcsc-rs.log"
-    ;;
-  *)
-    echo "使い方: $0 [install [--binary <file>] | stop | status | log [行数]]" >&2
-    exit 1
+    adb shell "tail -n $lines $DIR/pcsc-rs.log"
     ;;
 esac

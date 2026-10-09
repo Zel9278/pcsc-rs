@@ -161,6 +161,7 @@ $env:PASS = "<PASS>"; & ([scriptblock]::Create((irm https://raw.githubuserconten
 - 端末から切り離して動くので、ケーブルを抜いても、画面を消して省電力（Doze）に入っても止まりません。落ちたとき・自動更新のあとは 5 秒後に起動し直します
 - 端末を再起動すると止まるので、もう一度 `install` してください（2回目からは `PASS` と名前を引き継ぎます）
 - 名前を指定しないと機種名（例: `SH-M28`）になります
+- adb が PATH に無いときは、`--adb /path/to/adb`（PowerShell 版は `-Adb C:\path\to\adb.exe`）か、環境変数 `ADB` で場所を指定します
 
 ### Nix
 
