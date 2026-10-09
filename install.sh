@@ -65,7 +65,9 @@ else
   keep=
   if [ -f "$conf" ]; then
     if [ -z "${PASS:-}" ]; then
-      PASS=$(sed -n -e 's/^Environment="PASS=\(.*\)"$/\1/p' -e 's/^Environment=PASS=\([^"]*\)$/\1/p' "$conf" | head -n 1)
+      # unit_escape で書いたエスケープを戻す
+      PASS=$(sed -n -e 's/^Environment="PASS=\(.*\)"$/\1/p' -e 's/^Environment=PASS=\([^"]*\)$/\1/p' "$conf" | head -n 1 |
+        sed -e 's/%%/%/g' -e 's/\\"/"/g' -e 's/\\\\/\\/g')
     fi
     keep=$(grep -E '^Environment=' "$conf" | grep -vE '^Environment="?(PASS|PCSC_UPDATED)=' || true)
   fi
@@ -148,12 +150,19 @@ PLIST
   echo "入れた: $tag ($target, $scope, launchd: $domain/$label)"
   tail -n 8 "$log" 2>/dev/null || true
 else
+  # Environment="…" の中の値。systemd は % 指定子とバックスラッシュを解釈するのでエスケープする
+  unit_escape() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/%/%%/g'; }
   if [ "$scope" = system ]; then
-    wanted=network-online.target
+    # multi-user.target は毎回の起動に入る。network-online.target はほかのサービスが
+    # 必要としたときだけなので、そこに入れると再起動後に起動しないことがある
+    wanted=multi-user.target
+    wants="Wants=network-online.target
+"
     systemctl() { command systemctl "$@"; }
     journal() { journalctl -u pcsc-rs "$@"; }
   else
     wanted=default.target
+    wants=
     systemctl() { command systemctl --user "$@"; }
     journal() { journalctl --user -u pcsc-rs "$@"; }
   fi
@@ -162,14 +171,16 @@ else
   cat > "$conf" <<UNIT
 [Unit]
 Description=PCStatus Client
-After=network-online.target
+${wants}After=network-online.target
 
 [Service]
-Environment="PASS=$PASS"
+Environment="PASS=$(unit_escape "$PASS")"
 Environment="PCSC_UPDATED=terminate"
 ${keep:+$keep
 }ExecStart=$bin
 Restart=always
+# 間を空けないと、続けて5回すぐ終了したとき（起動時にネットが無い、PASS が違う）に systemd があきらめて止める
+RestartSec=5
 
 [Install]
 WantedBy=$wanted

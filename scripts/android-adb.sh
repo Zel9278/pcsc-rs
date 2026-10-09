@@ -103,11 +103,17 @@ case "$command" in
       [ -n "$tag" ] || { echo "最新リリースが取れなかった" >&2; exit 1; }
       if [ -t 2 ]; then progress=--progress-bar; else progress=-sS; fi
       for target in $TARGETS; do
-        if curl -fL "$progress" -o "$tmp/pcsc-rs" "https://github.com/Zel9278/pcsc-rs/releases/download/$tag/pcsc-rs-$tag-$target" 2>/dev/null; then
+        # 次の候補に進むのはファイルが無いとき（404）だけ。通信の失敗で musl 版に切り替わらないように
+        code=$(curl -L "$progress" -o "$tmp/pcsc-rs" -w '%{http_code}' "https://github.com/Zel9278/pcsc-rs/releases/download/$tag/pcsc-rs-$tag-$target") || {
+          echo "ダウンロードに失敗した（$target）" >&2
+          exit 1
+        }
+        if [ "$code" = 200 ]; then
           echo "$tag の $target を入れる"
           break
         fi
         rm -f "$tmp/pcsc-rs"
+        [ "$code" = 404 ] || { echo "ダウンロードに失敗した（$target: HTTP $code）" >&2; exit 1; }
       done
       [ -f "$tmp/pcsc-rs" ] || { echo "$tag に aarch64 の Android 向けのファイルが無い" >&2; exit 1; }
       binary=$tmp/pcsc-rs
@@ -116,12 +122,20 @@ case "$command" in
     adb shell "mkdir -p $DIR"
     # 指定が無ければ、入っている .env の PASS と名前を引き継ぐ
     old_env=$(adb shell "cat $DIR/.env 2>/dev/null" | tr -d '\r')
-    pass=${PASS:-$(printf '%s\n' "$old_env" | sed -n 's/^PASS=//p')}
-    hostname=${hostname:-$(printf '%s\n' "$old_env" | sed -n 's/^HOSTNAME=//p')}
+    # .env の値。'…' や "…" で囲んであれば外す
+    env_value() {
+      printf '%s\n' "$old_env" | sed -n "s/^$1=//p" | head -n 1 | sed -e "s/^'\\(.*\\)'\$/\\1/" -e 's/^"\(.*\)"$/\1/'
+    }
+    pass=${PASS:-$(env_value PASS)}
+    hostname=${hostname:-$(env_value HOSTNAME)}
     [ -n "$pass" ] || { echo "PASS を指定して（PASS=<PASS> $0 install）" >&2; exit 1; }
+    # 値は '…' で囲んで書く（空白や記号があってもそのまま読まれる）。' だけは使えない
+    case "$pass$hostname" in *\'*) echo "PASS と名前に ' は使えない" >&2; exit 1 ;; esac
     {
-      printf 'PASS=%s\nPCSC_UPDATED=terminate\n' "$pass"
-      [ -z "$hostname" ] || printf 'HOSTNAME=%s\n' "$hostname"
+      printf "PASS='%s'\nPCSC_UPDATED=terminate\n" "$pass"
+      [ -z "$hostname" ] || printf "HOSTNAME='%s'\n" "$hostname"
+      # ほかの設定（PCSC_URI、DEV_MODE など）はそのまま残す
+      printf '%s\n' "$old_env" | grep -vE '^(PASS|PCSC_UPDATED|HOSTNAME)=|^$' || true
     } | adb shell "umask 077; cat > $DIR/.env"
 
     stop_remote

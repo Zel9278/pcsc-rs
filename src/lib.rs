@@ -1,9 +1,27 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+/// println! that never panics: a hung-up terminal (EIO), a closed pipe (EPIPE) or a full
+/// disk behind the log (ENOSPC) must not stop the client.
+macro_rules! log {
+    ($($arg:tt)*) => {{
+        use std::io::Write as _;
+        let _ = writeln!(std::io::stdout().lock(), $($arg)*);
+    }};
+}
+
+/// eprintln! that never panics (see `log!`).
+macro_rules! elog {
+    ($($arg:tt)*) => {{
+        use std::io::Write as _;
+        let _ = writeln!(std::io::stderr().lock(), $($arg)*);
+    }};
+}
+
 #[cfg(any(target_os = "linux", target_os = "android"))]
 mod android;
 mod battery;
 mod client;
+mod cmd;
 mod config;
 mod gpu;
 mod io;
@@ -38,8 +56,8 @@ pub fn start(config: &Config) -> ! {
         dev: config.dev,
     });
 
-    println!("This OS is supported!");
-    println!("Hello, world! {}", config.uri);
+    log!("This OS is supported!");
+    log!("Hello, world! {}", config.uri);
 
     client::run(config, &status)
 }

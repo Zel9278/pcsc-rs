@@ -54,11 +54,8 @@ pub fn get() -> Option<BatteryData> {
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn read() -> Option<BatteryData> {
     if crate::android::is_android() {
-        let output = std::process::Command::new("dumpsys")
-            .arg("battery")
-            .output()
-            .ok()?;
-        return parse::dumpsys(&String::from_utf8_lossy(&output.stdout));
+        let output = crate::cmd::run(std::process::Command::new("dumpsys").arg("battery")).ok()?;
+        return parse::dumpsys(&output.stdout);
     }
     sysfs::read()
 }
@@ -81,11 +78,8 @@ fn read() -> Option<BatteryData> {
 
 #[cfg(target_os = "macos")]
 fn read() -> Option<BatteryData> {
-    let output = std::process::Command::new("pmset")
-        .args(["-g", "batt"])
-        .output()
-        .ok()?;
-    parse::pmset(&String::from_utf8_lossy(&output.stdout))
+    let output = crate::cmd::run(std::process::Command::new("pmset").args(["-g", "batt"])).ok()?;
+    parse::pmset(&output.stdout)
 }
 
 #[cfg(not(any(

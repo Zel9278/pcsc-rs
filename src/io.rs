@@ -36,7 +36,7 @@ impl Tracker {
     }
 
     /// Bytes read and written per second by the whole system (zram swap is not in it).
-    /// Only where per-device statistics are not readable (Android).
+    /// Android only, where per-device statistics are not readable or not usable.
     pub fn system_io(&self) -> Option<(u64, u64)> {
         #[cfg(any(target_os = "linux", target_os = "android"))]
         return self.inner.system_io;
@@ -150,9 +150,11 @@ mod linux {
 
             let diskstats = fs::read_to_string("/proc/diskstats").ok();
             // Android keeps /proc/diskstats (and /sys/block/*/stat) from everyone but
-            // root; fall back to the system-wide totals in /proc/vmstat
+            // root; fall back to the system-wide totals in /proc/vmstat. Where it is readable
+            // (su), sysinfo still cannot match /dev/block/dm-N to its diskstats line, so
+            // Android always uses the totals.
             self.system_io = None;
-            if diskstats.is_none() {
+            if diskstats.is_none() || crate::android::is_android() {
                 let vm = fs::read_to_string("/proc/vmstat")
                     .ok()
                     .and_then(|s| parse::vm_io(&s));

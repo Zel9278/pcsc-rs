@@ -1,7 +1,11 @@
 //! GPU usage: NVIDIA through `nvidia-smi`, and phone GPUs (Qualcomm Adreno,
 //! Samsung's Mali / Xclipse) through sysfs. Anything unexpected means "no GPU".
 
-use std::process::Command;
+use std::{
+    process::Command,
+    sync::Mutex,
+    time::{Duration, Instant},
+};
 
 use crate::status::{GpuData, GpuMemory};
 
@@ -14,7 +18,68 @@ pub fn get_info() -> Vec<GpuData> {
     gpus
 }
 
+/// When `nvidia-smi` is missing, hangs or fails, try it again only this often. Trying every
+/// second costs a process each time, and with glibc the failed child's SIGCHLD can interrupt
+/// the socket read (#674).
+const NVIDIA_SMI_RETRY: Duration = Duration::from_secs(300);
+
 fn nvidia() -> Vec<GpuData> {
+    // Asking a runtime-suspended GPU wakes it up and keeps it awake (hybrid laptops would never
+    // power the dGPU down); while it sleeps, report the last memory figures as idle
+    static LAST: Mutex<Vec<GpuData>> = Mutex::new(Vec::new());
+    #[cfg(target_os = "linux")]
+    if nvidia_suspended() {
+        let last = LAST
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        return last
+            .iter()
+            .map(|g| GpuData {
+                usage: 0.0,
+                temperature: None,
+                ..g.clone()
+            })
+            .collect();
+    }
+    let gpus = query_nvidia();
+    LAST.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone_from(&gpus);
+    gpus
+}
+
+/// True when every NVIDIA GPU on the PCI bus is runtime-suspended (D3); false when there is
+/// none or the kernel does not suspend them.
+#[cfg(target_os = "linux")]
+fn nvidia_suspended() -> bool {
+    let Ok(devices) = std::fs::read_dir("/sys/bus/pci/devices") else {
+        return false;
+    };
+    let mut found = false;
+    for device in devices.flatten() {
+        let path = device.path();
+        let read = |name: &str| std::fs::read_to_string(path.join(name)).unwrap_or_default();
+        // Display controllers (class 0x03xxxx) from NVIDIA (0x10de)
+        if read("vendor").trim() != "0x10de" || !read("class").trim().starts_with("0x03") {
+            continue;
+        }
+        if read("power/runtime_status").trim() != "suspended" {
+            return false;
+        }
+        found = true;
+    }
+    found
+}
+
+fn query_nvidia() -> Vec<GpuData> {
+    static MISSING_SINCE: Mutex<Option<Instant>> = Mutex::new(None);
+    let mut missing = MISSING_SINCE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if missing.is_some_and(|since| since.elapsed() < NVIDIA_SMI_RETRY) {
+        return Vec::new();
+    }
+
     let mut command = Command::new("nvidia-smi");
     command.args([
         "--format=csv,noheader,nounits",
@@ -28,8 +93,14 @@ fn nvidia() -> Vec<GpuData> {
         command.creation_flags(CREATE_NO_WINDOW);
     }
 
-    match command.output() {
-        Ok(output) if output.status.success() => parse(&String::from_utf8_lossy(&output.stdout)),
+    let output = crate::cmd::run(&mut command);
+    *missing = match &output {
+        Ok(output) if output.success => None,
+        // Missing, hung or failing every time (no driver loaded): try again later
+        _ => Some(Instant::now()),
+    };
+    match output {
+        Ok(output) if output.success => parse(&output.stdout),
         _ => Vec::new(),
     }
 }
@@ -152,11 +223,8 @@ mod mobile {
         if !crate::android::is_android() {
             return None;
         }
-        let output = Command::new("dumpsys")
-            .args(["gpu", "--gpumem"])
-            .output()
-            .ok()?;
-        global_total(&String::from_utf8_lossy(&output.stdout))
+        let output = crate::cmd::run(Command::new("dumpsys").args(["gpu", "--gpumem"])).ok()?;
+        global_total(&output.stdout)
     }
 
     /// `Global total: 773124096` from `dumpsys gpu --gpumem`.
