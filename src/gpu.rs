@@ -18,7 +18,7 @@ fn nvidia() -> Vec<GpuData> {
     let mut command = Command::new("nvidia-smi");
     command.args([
         "--format=csv,noheader,nounits",
-        "--query-gpu=name,utilization.gpu,memory.free,memory.total",
+        "--query-gpu=name,utilization.gpu,memory.free,memory.total,temperature.gpu",
     ]);
 
     #[cfg(target_os = "windows")]
@@ -34,7 +34,7 @@ fn nvidia() -> Vec<GpuData> {
     }
 }
 
-/// One line per GPU, e.g. `NVIDIA GeForce RTX 3050 Ti Laptop GPU, 0, 3784, 4096`.
+/// One line per GPU, e.g. `NVIDIA GeForce RTX 3050 Ti Laptop GPU, 0, 3784, 4096, 45`.
 fn parse(output: &str) -> Vec<GpuData> {
     output.lines().filter_map(parse_line).collect()
 }
@@ -44,7 +44,9 @@ fn parse_line(line: &str) -> Option<GpuData> {
         return None;
     }
     // The name itself may contain commas, so read the numbers from the right.
-    let mut fields = line.rsplitn(4, ',').map(str::trim);
+    let mut fields = line.rsplitn(5, ',').map(str::trim);
+    // "[N/A]" when the GPU has no sensor
+    let temperature = fields.next()?.parse().ok();
     let total = fields.next()?.parse().ok()?;
     let free = fields.next()?.parse().ok()?;
     // "[N/A]" on some GPUs; reported as 0 (the wire format has no "unknown")
@@ -54,6 +56,7 @@ fn parse_line(line: &str) -> Option<GpuData> {
         name,
         usage,
         memory: GpuMemory { free, total },
+        temperature,
     })
 }
 
@@ -86,6 +89,8 @@ mod mobile {
             name,
             usage,
             memory: shared_memory().unwrap_or(GpuMemory { free: 0, total: 0 }),
+            // In the thermal zones (the "GPU" temperature)
+            temperature: None,
         })
     }
 
@@ -200,7 +205,7 @@ mod tests {
     #[test]
     fn parses_a_gpu() {
         assert_eq!(
-            parse("NVIDIA GeForce RTX 3050 Ti Laptop GPU, 7, 3784, 4096\n"),
+            parse("NVIDIA GeForce RTX 3050 Ti Laptop GPU, 7, 3784, 4096, 45\n"),
             vec![GpuData {
                 name: "NVIDIA GeForce RTX 3050 Ti Laptop GPU".into(),
                 usage: 7.0,
@@ -208,13 +213,14 @@ mod tests {
                     free: 3784,
                     total: 4096
                 },
+                temperature: Some(45.0),
             }]
         );
     }
 
     #[test]
     fn several_gpus() {
-        let gpus = parse("GPU A, 1, 2, 3\nGPU B, 4, 5, 6\n");
+        let gpus = parse("GPU A, 1, 2, 3, 40\nGPU B, 4, 5, 6, 50\n");
         assert_eq!(gpus.len(), 2);
         assert_eq!(gpus[1].name, "GPU B");
         assert!((gpus[1].usage - 4.0).abs() < f64::EPSILON);
@@ -222,15 +228,16 @@ mod tests {
 
     #[test]
     fn usage_not_available() {
-        let gpus = parse("Tesla K80, [N/A], 11000, 11441\r\n");
+        let gpus = parse("Tesla K80, [N/A], 11000, 11441, [N/A]\r\n");
         assert!(gpus[0].usage.abs() < f64::EPSILON);
         assert_eq!(gpus[0].memory.total, 11441);
+        assert_eq!(gpus[0].temperature, None);
     }
 
     #[test]
     fn name_with_comma() {
         assert_eq!(
-            parse("Vendor, Model X, 50, 100, 200")[0].name,
+            parse("Vendor, Model X, 50, 100, 200, 60")[0].name,
             "Vendor, Model X"
         );
     }
@@ -242,7 +249,7 @@ mod tests {
             parse("NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver."),
             []
         );
-        assert_eq!(parse("GPU, 1, [N/A], [N/A]"), []);
+        assert_eq!(parse("GPU, 1, [N/A], [N/A], 40"), []);
     }
 
     #[cfg(any(target_os = "linux", target_os = "android"))]

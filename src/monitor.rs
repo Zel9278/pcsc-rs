@@ -10,6 +10,7 @@ use sysinfo::{CpuRefreshKind, DiskRefreshKind, Disks, MemoryRefreshKind, Refresh
 use crate::{
     io,
     status::{Identity, SystemStatus},
+    thermal,
 };
 
 pub type SharedStatus = Arc<ArcSwap<SystemStatus>>;
@@ -20,6 +21,7 @@ pub struct Sampler {
     pub system: System,
     pub disks: Disks,
     pub io: io::Tracker,
+    pub thermal: thermal::Tracker,
     /// Time between the last two samples; zero before the second one.
     pub interval: Duration,
     sampled_at: Instant,
@@ -41,6 +43,7 @@ impl Sampler {
             system: System::new_with_specifics(refresh_kind()),
             disks: Disks::new_with_refreshed_list_specifics(disk_refresh_kind()),
             io: io::Tracker::new(),
+            thermal: thermal::Tracker::default(),
             interval: Duration::ZERO,
             sampled_at: Instant::now(),
         }
@@ -50,6 +53,7 @@ impl Sampler {
         self.system.refresh_specifics(refresh_kind());
         self.disks.refresh_specifics(true, disk_refresh_kind());
         self.io.refresh();
+        self.thermal.refresh();
         let now = Instant::now();
         self.interval = now.duration_since(self.sampled_at);
         self.sampled_at = now;

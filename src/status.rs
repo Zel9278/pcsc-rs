@@ -4,9 +4,16 @@
 
 use cfg_if::cfg_if;
 use serde::Serialize;
-use sysinfo::{Cpu, System};
+use std::time::Duration;
 
-use crate::{gpu, monitor::Sampler};
+use sysinfo::{Cpu, Disks, System};
+
+use crate::{
+    battery::{self, BatteryData},
+    gpu, io,
+    monitor::Sampler,
+    thermal::{self, Temperature},
+};
 
 #[derive(Serialize, Clone, Debug)]
 pub struct CoreData {
@@ -61,6 +68,9 @@ pub struct GpuData {
     pub(crate) name: String,
     pub(crate) usage: f64,
     pub(crate) memory: GpuMemory,
+    /// °C (NVIDIA only)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) temperature: Option<f64>,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -81,6 +91,12 @@ pub struct SystemStatus {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) iowait: Option<f64>,
     pub(crate) gpus: Vec<GpuData>,
+    /// Only on machines with a battery.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) battery: Option<BatteryData>,
+    /// Empty where no sensor is readable (Windows without administrator rights, most VMs).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) temperatures: Vec<Temperature>,
     /// Kept by the server; sent for compatibility with the monorepo server.
     pub(crate) index: u32,
     /// Kept by the server; sent for compatibility with the monorepo server.
@@ -106,14 +122,10 @@ impl SystemStatus {
             system,
             disks,
             io,
+            thermal,
             interval,
             ..
         } = sampler;
-        // Bytes since the previous sample, per second; nothing to compare with on the first one
-        let per_second = |bytes: u64| {
-            let millis = u64::try_from(interval.as_millis()).unwrap_or(u64::MAX);
-            bytes.saturating_mul(1000).checked_div(millis).unwrap_or(0)
-        };
 
         let (os_name, os_version, system_hostname) = platform();
         let hostname = identity
@@ -140,57 +152,9 @@ impl SystemStatus {
             cpus: system.cpus().iter().map(Into::into).collect(),
         };
 
-        // The same device can be mounted several times (btrfs subvolumes and
-        // the like); list it once. Read-only mounts (AppImage, snap, ISO) are
-        // images that always look full, so leave them out.
-        let mut storages: Vec<StorageData> = Vec::new();
-        for disk in disks
-            .iter()
-            .filter(|d| d.total_space() != 0 && !d.is_read_only())
-        {
-            let name = disk.name().to_string_lossy().into_owned();
-            // On Android device names like /dev/block/dm-67 mean nothing to the user; show
-            // where it is mounted, and only the user's own storage
-            #[cfg(any(target_os = "linux", target_os = "android"))]
-            let name = if crate::android::is_android() {
-                if !crate::android::is_user_storage(disk.mount_point()) {
-                    continue;
-                }
-                disk.mount_point().to_string_lossy().into_owned()
-            } else {
-                name
-            };
-            let (free, total) = (disk.available_space(), disk.total_space());
-            if storages
-                .iter()
-                .any(|s| s.name == name && s.free == free && s.total == total)
-            {
-                continue;
-            }
-            let usage = disk.usage();
-            let (read, written) = (
-                per_second(usage.read_bytes),
-                per_second(usage.written_bytes),
-            );
-            // Android only gives system-wide totals; they belong to the data partition
-            #[cfg(any(target_os = "linux", target_os = "android"))]
-            let (read, written) = if disk.mount_point() == std::path::Path::new("/data")
-                && let Some(rates) = io.system_io()
-            {
-                rates
-            } else {
-                (read, written)
-            };
-            storages.push(StorageData {
-                // by the device, not the name shown (a mount point on Android)
-                busy: io.busy(&disk.name().to_string_lossy()),
-                name,
-                free,
-                total,
-                read,
-                written,
-            });
-        }
+        let storages = storages(disks, io, *interval);
+
+        let (battery, temperatures) = sensors(thermal);
 
         Self {
             dev: identity.dev,
@@ -211,10 +175,86 @@ impl SystemStatus {
             loadavg,
             iowait: io.iowait(),
             gpus: gpu::get_info(),
+            battery,
+            temperatures,
             index: 0,
             histories: [],
         }
     }
+}
+
+fn storages(disks: &Disks, io: &io::Tracker, interval: Duration) -> Vec<StorageData> {
+    // Bytes since the previous sample, per second; nothing to compare with on the first one
+    let per_second = |bytes: u64| {
+        let millis = u64::try_from(interval.as_millis()).unwrap_or(u64::MAX);
+        bytes.saturating_mul(1000).checked_div(millis).unwrap_or(0)
+    };
+    // The same device can be mounted several times (btrfs subvolumes and
+    // the like); list it once. Read-only mounts (AppImage, snap, ISO) are
+    // images that always look full, so leave them out.
+    let mut storages: Vec<StorageData> = Vec::new();
+    for disk in disks
+        .iter()
+        .filter(|d| d.total_space() != 0 && !d.is_read_only())
+    {
+        let name = disk.name().to_string_lossy().into_owned();
+        // On Android device names like /dev/block/dm-67 mean nothing to the user; show
+        // where it is mounted, and only the user's own storage
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        let name = if crate::android::is_android() {
+            if !crate::android::is_user_storage(disk.mount_point()) {
+                continue;
+            }
+            disk.mount_point().to_string_lossy().into_owned()
+        } else {
+            name
+        };
+        let (free, total) = (disk.available_space(), disk.total_space());
+        if storages
+            .iter()
+            .any(|s| s.name == name && s.free == free && s.total == total)
+        {
+            continue;
+        }
+        let usage = disk.usage();
+        let (read, written) = (
+            per_second(usage.read_bytes),
+            per_second(usage.written_bytes),
+        );
+        // Android only gives system-wide totals; they belong to the data partition
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        let (read, written) = if disk.mount_point() == std::path::Path::new("/data")
+            && let Some(rates) = io.system_io()
+        {
+            rates
+        } else {
+            (read, written)
+        };
+        storages.push(StorageData {
+            // by the device, not the name shown (a mount point on Android)
+            busy: io.busy(&disk.name().to_string_lossy()),
+            name,
+            free,
+            total,
+            read,
+            written,
+        });
+    }
+    storages
+}
+
+fn sensors(thermal: &thermal::Tracker) -> (Option<BatteryData>, Vec<Temperature>) {
+    let battery = battery::get();
+    let mut temperatures = thermal.temperatures();
+    // Android reports the battery's own sensor with the battery
+    if let Some(celsius) = battery.as_ref().and_then(|b| b.temperature) {
+        temperatures.retain(|t| t.label != "Battery");
+        temperatures.push(Temperature {
+            label: "Battery".into(),
+            value: celsius,
+        });
+    }
+    (battery, temperatures)
 }
 
 /// OS name, version and hostname. On Android sysinfo finds no os-release and the
@@ -265,6 +305,17 @@ pub(crate) fn sample() -> SystemStatus {
             name: "gpu".into(),
             usage: 7.0,
             memory: GpuMemory { free: 5, total: 6 },
+            temperature: Some(55.0),
+        }],
+        battery: Some(BatteryData {
+            level: 80.0,
+            state: battery::BatteryState::Charging,
+            plugged: Some(true),
+            temperature: None,
+        }),
+        temperatures: vec![Temperature {
+            label: "coretemp Package id 0".into(),
+            value: 61.5,
         }],
         index: 0,
         histories: [],
@@ -289,7 +340,9 @@ mod tests {
                 "uptime": 61,
                 "loadavg": [0.5, 0.25, 0.125],
                 "iowait": 1.5,
-                "gpus": [{ "name": "gpu", "usage": 7.0, "memory": { "free": 5, "total": 6 } }],
+                "gpus": [{ "name": "gpu", "usage": 7.0, "memory": { "free": 5, "total": 6 }, "temperature": 55.0 }],
+                "battery": { "level": 80.0, "state": "charging", "plugged": true },
+                "temperatures": [{ "label": "coretemp Package id 0", "value": 61.5 }],
                 "index": 0,
                 "histories": [],
             })

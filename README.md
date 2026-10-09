@@ -25,9 +25,11 @@ HOSTNAME=ホスト名として表示させたい文字列
 3. CPU 名、CPU 使用率 (全体, コアごと) (e.g. `AMD Ryzen 5 3500 6-Core Processor`)
 4. 物理メモリ使用量、スワップメモリ使用量
 5. マウントされているストレージ使用量 (実行されている root を参照)
-6. GPU 使用率、GPU メモリ使用量 (NVIDIA GPU のみ、複数枚対応)
+6. GPU 使用率、GPU メモリ使用量 (NVIDIA GPU は複数枚対応・温度も。Android は Adreno)
 7. 連続起動時間
 8. Load Average (Linux のみ)
+9. バッテリー残量、充電中かどうか (バッテリーのある PC・スマホのみ)
+10. センサーの温度 (CPU、NVMe など。Windows は管理者権限 (`-System` でのインストール) のときだけ取れます。Android は CPU・GPU・メモリ・バッテリーなどにまとめて表示)
 
 ## 対応環境
 
