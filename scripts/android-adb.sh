@@ -6,13 +6,15 @@
 #   scripts/android-adb.sh install --binary <file> 手元でビルドしたものを入れる
 #   scripts/android-adb.sh install --hostname <名前> PC Status に出す名前（既定は機種名。例: SH-M28）
 #   scripts/android-adb.sh stop | status | log [行数]
+#   scripts/android-adb.sh devices                つながっている端末とシリアルの一覧
 #   … --adb <adb の場所>（または環境変数 ADB）で、PATH に無い adb を使う
+#   … --serial <シリアル>（または ANDROID_SERIAL）で端末を選ぶ。USB でも、無線デバッグの IP:ポートでもよい
 #
 # adb shell の権限で動くので、CPU（コアごと）・GPU（Adreno）・ロードアベレージも取れる。
 # 端末から切り離して動かすので、ケーブルを抜いても・画面を消して Doze に入っても止まらない。
 # 落ちたとき・自動更新で終わったときは 5 秒後に起動し直す。
 # 端末を再起動すると止まるので、もう一度 install する（USB か、無線デバッグの adb connect で）。
-# 端末が複数つながっているときは ANDROID_SERIAL で選ぶ。
+# 端末が複数つながっているときは --serial か ANDROID_SERIAL で選ぶ（devices で一覧が出る）。
 set -eu
 
 DIR=/data/local/tmp/pcsc-rs
@@ -23,15 +25,17 @@ binary=
 hostname=
 lines=30
 adb_bin=${ADB:-adb}
+serial=${ANDROID_SERIAL:-}
 while [ $# -gt 0 ]; do
   case "$1" in
-    install | stop | status | log) command=$1; shift ;;
+    install | stop | status | log | devices) command=$1; shift ;;
     --binary) binary=${2:?--binary にファイルを指定して}; shift 2 ;;
     --hostname) hostname=${2:?--hostname に名前を指定して}; shift 2 ;;
     --adb) adb_bin=${2:?--adb に adb の場所を指定して}; shift 2 ;;
+    --serial | -s) serial=${2:?--serial にシリアルを指定して}; shift 2 ;;
     [0-9]*) lines=$1; shift ;;
     *)
-      echo "使い方: $0 [install [--binary <file>] [--hostname <名前>] | stop | status | log [行数]] [--adb <adb の場所>]" >&2
+      echo "使い方: $0 [install [--binary <file>] [--hostname <名前>] | stop | status | log [行数] | devices] [--serial <シリアル>] [--adb <adb の場所>]" >&2
       exit 1
       ;;
   esac
@@ -41,8 +45,41 @@ if ! command -v "$adb_bin" >/dev/null 2>&1; then
   echo "adb が見つからない: $adb_bin（--adb か環境変数 ADB で場所を指定して）" >&2
   exit 1
 fi
-# 以下の adb はすべて、指定された adb を呼ぶ（command で関数自身を呼ばないようにする）
-adb() { command "$adb_bin" "$@"; }
+if [ "$command" = devices ]; then
+  command "$adb_bin" devices -l
+  exit
+fi
+
+# 端末を選ぶ。指定が無ければ、つながっているのが1台だけのときにそれを使う
+if [ -n "$serial" ]; then
+  if [ "$(command "$adb_bin" -s "$serial" get-state 2>/dev/null)" != device ]; then
+    echo "端末 $serial が使えない（つながっていないか、許可されていない）。つながっている端末:" >&2
+    command "$adb_bin" devices | awk 'NR > 1 && NF >= 2' | sed 's/^/  /' >&2
+    exit 1
+  fi
+else
+  list=$(command "$adb_bin" devices | awk 'NR > 1 && NF >= 2')
+  ready=$(printf '%s\n' "$list" | awk '$2 == "device"' | wc -l)
+  if [ "$ready" -ne 1 ]; then
+    if [ "$ready" -eq 0 ]; then
+      echo "使える端末がつながっていない（USB デバッグか無線デバッグを有効にして、端末で許可して）" >&2
+    else
+      echo "端末が $ready 台つながっている。--serial で選んで:" >&2
+    fi
+    [ -z "$list" ] || printf '%s\n' "$list" | sed 's/^/  /' >&2
+    printf '%s\n' "$list" | grep -q unauthorized && echo "（unauthorized の端末は、端末の画面でこの PC を許可して）" >&2
+    exit 1
+  fi
+fi
+
+# 以下の adb はすべて、指定された adb と端末を使う（command で関数自身を呼ばないようにする）
+adb() {
+  if [ -n "$serial" ]; then
+    command "$adb_bin" -s "$serial" "$@"
+  else
+    command "$adb_bin" "$@"
+  fi
+}
 
 stop_remote() {
   # ループ（PID はループ自身が loop.pid に書く）を先に止めてから、本体を止める
