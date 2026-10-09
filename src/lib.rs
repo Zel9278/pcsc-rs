@@ -2,12 +2,14 @@
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 mod android;
+mod battery;
 mod client;
 mod config;
 mod gpu;
 mod io;
 mod monitor;
 mod status;
+mod thermal;
 mod update;
 
 pub use config::Config;

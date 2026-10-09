@@ -10,6 +10,11 @@ pub struct Tracker {
     inner: linux::Tracker,
 }
 
+// Elsewhere every value is unknown
+#[cfg_attr(
+    not(any(target_os = "linux", target_os = "android")),
+    allow(dead_code, clippy::unused_self)
+)]
 impl Tracker {
     pub fn new() -> Self {
         let mut tracker = Self::default();
@@ -40,10 +45,6 @@ impl Tracker {
     }
 
     /// Percentage of time the device (e.g. `/dev/sda1`) was busy since the previous refresh.
-    #[cfg_attr(
-        not(any(target_os = "linux", target_os = "android")),
-        allow(clippy::unused_self)
-    )]
     pub fn busy(&self, device: &str) -> Option<f64> {
         #[cfg(any(target_os = "linux", target_os = "android"))]
         return self.inner.busy(device);

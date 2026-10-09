@@ -954,6 +954,7 @@ dependencies = [
  "serde_json",
  "sysinfo",
  "tungstenite",
+ "windows-sys 0.61.2",
  "winres",
 ]
 
