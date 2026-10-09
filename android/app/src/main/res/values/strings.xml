@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">pcsc-rs</string>
+    <string name="subtitle">PC Status client for this phone</string>
+
+    <string name="access_title">Access</string>
+    <string name="access_explain">The client reads CPU and GPU usage the way adb shell can, so it needs root or Shizuku.</string>
+    <string name="use_root">Use root</string>
+    <string name="use_shizuku">Use Shizuku</string>
+    <string name="root_ok">Root: granted</string>
+    <string name="root_failed">Root was not granted: %1$s</string>
+    <string name="shizuku_not_running">Shizuku is not running. Start it in the Shizuku app.</string>
+    <string name="shizuku_unsupported">This Shizuku is too old (v11 or later is needed).</string>
+    <string name="shizuku_needs_permission">Shizuku: allow this app</string>
+    <string name="shizuku_denied">Shizuku: denied. Allow it in the Shizuku app.</string>
+    <string name="shizuku_ready">Shizuku: allowed</string>
+    <string name="allow">Allow</string>
+    <string name="get_shizuku">Get Shizuku</string>
+    <string name="no_access">Neither root nor Shizuku is available. Install Shizuku (no root needed on Android 11 and later, with wireless debugging), or root the phone.</string>
+
+    <string name="status_title">Client</string>
+    <string name="status_running">Running</string>
+    <string name="status_stopped">Stopped</string>
+    <string name="status_connected">Connected to the server</string>
+    <string name="status_not_connected">Not connected (see the log)</string>
+    <string name="status_version">Version: %1$s</string>
+    <string name="start">Start</string>
+    <string name="restart">Restart</string>
+    <string name="stop">Stop</string>
+    <string name="refresh">Refresh</string>
+    <string name="keeps_running">It keeps running after you close the app, until you stop it or restart the phone.</string>
+
+    <string name="settings_title">Settings</string>
+    <string name="pass">PASS</string>
+    <string name="pass_needed">Enter PASS first</string>
+    <string name="hostname">Name shown on PC Status</string>
+    <string name="hostname_hint">Default: %1$s</string>
+    <string name="uri">Server (optional)</string>
+    <string name="uri_hint">Default: PC Status</string>
+    <string name="no_quote">Cannot contain \' or a line break</string>
+    <string name="start_on_boot">Start after the phone restarts</string>
+    <string name="start_on_boot_shizuku">With Shizuku this works only when Shizuku also starts on boot (Sui, or root).</string>
+    <string name="imported">Loaded the settings of the client already on this phone</string>
+
+    <string name="log_title">Log</string>
+    <string name="log_empty">No log yet</string>
+    <string name="failed">Failed: %1$s</string>
+</resources>

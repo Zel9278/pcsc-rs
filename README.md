@@ -145,6 +145,19 @@ curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | s
 
 ### Android（試験的）
 
+#### アプリ（root か Shizuku）
+
+root 化した端末か、[Shizuku](https://shizuku.rikka.app/) が動いている端末なら、アプリで入れられます。[Releases](https://github.com/Zel9278/pcsc-rs/releases/latest) の `pcsc-rs-<バージョン>-android.apk`（arm64）を入れて開き、root か Shizuku を選んで、PASS を入れて「開始」を押します。
+
+- 動かし方は下の adb 版と同じで、`/data/local/tmp/pcsc-rs` に置いて端末から切り離して動かします。アプリを閉じても動き続けます
+- adb 版で入れていたときは、PASS と名前をそのまま読み込みます
+- 「スマホの再起動後に自動で開始」を入れると、再起動のあとに自分で起動し直します（Shizuku の場合は、Shizuku も起動時に動く（Sui や root）ときだけ）
+- Shizuku は Android 11 以降なら無線デバッグで root なしで動かせます。ただし端末を再起動すると Shizuku も止まるので、そのたびに Shizuku を起動してからアプリで「開始」を押します
+
+自分でビルドするときは [android/README.md](android/README.md) を見てください。
+
+#### PC から adb で
+
 root なしで、PC から adb で入れます（[scripts/android-adb.sh](scripts/android-adb.sh)）。adb shell の権限で動くので、CPU（コアごと）・GPU（Adreno）・ロードアベレージも取れます。
 
 ```sh

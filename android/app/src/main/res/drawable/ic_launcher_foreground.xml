@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A monitor with a pulse line, in the 108dp adaptive icon grid (safe zone 66dp) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M33,36h42a4,4 0,0 1,4 4v24a4,4 0,0 1,-4 4H33a4,4 0,0 1,-4 -4V40a4,4 0,0 1,4 -4zM34,41v22h40V41z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M47,68h14v4h6v4H41v-4h6z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#7FD1AE"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M37,53h8l3,-6l5,12l4,-9l3,3h11" />
+</vector>

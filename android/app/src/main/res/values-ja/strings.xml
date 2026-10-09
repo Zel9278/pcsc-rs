@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="subtitle">このスマホの PC Status クライアント</string>
+
+    <string name="access_title">権限</string>
+    <string name="access_explain">CPU や GPU の使用率を adb shell と同じ方法で読むので、root か Shizuku が要ります。</string>
+    <string name="use_root">root を使う</string>
+    <string name="use_shizuku">Shizuku を使う</string>
+    <string name="root_ok">root: 許可済み</string>
+    <string name="root_failed">root の許可が得られませんでした: %1$s</string>
+    <string name="shizuku_not_running">Shizuku が動いていません。Shizuku のアプリで起動してください。</string>
+    <string name="shizuku_unsupported">Shizuku が古すぎます（v11 以降が必要）。</string>
+    <string name="shizuku_needs_permission">Shizuku: このアプリを許可してください</string>
+    <string name="shizuku_denied">Shizuku: 拒否されています。Shizuku のアプリで許可してください。</string>
+    <string name="shizuku_ready">Shizuku: 許可済み</string>
+    <string name="allow">許可する</string>
+    <string name="get_shizuku">Shizuku を入手</string>
+    <string name="no_access">root も Shizuku も使えません。Shizuku を入れるか（Android 11 以降はワイヤレスデバッグで root なしで使えます）、root 化してください。</string>
+
+    <string name="status_title">クライアント</string>
+    <string name="status_running">動作中</string>
+    <string name="status_stopped">停止中</string>
+    <string name="status_connected">サーバーに接続中</string>
+    <string name="status_not_connected">接続できていません（ログを見てください）</string>
+    <string name="status_version">バージョン: %1$s</string>
+    <string name="start">開始</string>
+    <string name="restart">再起動</string>
+    <string name="stop">停止</string>
+    <string name="refresh">更新</string>
+    <string name="keeps_running">アプリを閉じても、停止するかスマホを再起動するまで動き続けます。</string>
+
+    <string name="settings_title">設定</string>
+    <string name="pass">PASS</string>
+    <string name="pass_needed">先に PASS を入れてください</string>
+    <string name="hostname">PC Status に出す名前</string>
+    <string name="hostname_hint">未入力なら: %1$s</string>
+    <string name="uri">サーバー（任意）</string>
+    <string name="uri_hint">未入力なら PC Status</string>
+    <string name="no_quote">\' と改行は使えません</string>
+    <string name="start_on_boot">スマホの再起動後に自動で開始</string>
+    <string name="start_on_boot_shizuku">Shizuku の場合は、Shizuku 自体が起動時に動くとき（Sui や root）だけ効きます。</string>
+    <string name="imported">このスマホに入っていたクライアントの設定を読み込みました</string>
+
+    <string name="log_title">ログ</string>
+    <string name="log_empty">ログはまだありません</string>
+    <string name="failed">失敗しました: %1$s</string>
+</resources>
