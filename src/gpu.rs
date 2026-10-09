@@ -2,7 +2,6 @@
 //! Samsung's Mali / Xclipse) through sysfs. Anything unexpected means "no GPU".
 
 use std::{
-    io::ErrorKind,
     process::Command,
     sync::Mutex,
     time::{Duration, Instant},
@@ -19,7 +18,7 @@ pub fn get_info() -> Vec<GpuData> {
     gpus
 }
 
-/// Without `nvidia-smi` (or when it hangs), try it again only this often. Trying every
+/// When `nvidia-smi` is missing, hangs or fails, try it again only this often. Trying every
 /// second costs a process each time, and with glibc the failed child's SIGCHLD can interrupt
 /// the socket read (#674).
 const NVIDIA_SMI_RETRY: Duration = Duration::from_secs(300);
@@ -96,11 +95,9 @@ fn query_nvidia() -> Vec<GpuData> {
 
     let output = crate::cmd::run(&mut command);
     *missing = match &output {
-        // A hung nvidia-smi (driver trouble) is treated like a missing one
-        Err(e) if matches!(e.kind(), ErrorKind::NotFound | ErrorKind::TimedOut) => {
-            Some(Instant::now())
-        }
-        _ => None,
+        Ok(output) if output.success => None,
+        // Missing, hung or failing every time (no driver loaded): try again later
+        _ => Some(Instant::now()),
     };
     match output {
         Ok(output) if output.success => parse(&output.stdout),
