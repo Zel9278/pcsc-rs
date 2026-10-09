@@ -68,7 +68,12 @@ if (Get-ScheduledTask -TaskName $OtherTask -ErrorAction SilentlyContinue) {
 $keep = [ordered]@{}
 if (Test-Path -LiteralPath $EnvFile) {
     foreach ($line in Get-Content -LiteralPath $EnvFile -Encoding UTF8) {
-        if ($line -match "^\s*([A-Za-z_][A-Za-z0-9_]*)=(.*)$") { $keep[$Matches[1]] = $Matches[2] }
+        if ($line -match "^\s*([A-Za-z_][A-Za-z0-9_]*)=(.*)$") {
+            $key = $Matches[1]; $value = $Matches[2]
+            # Written in quotes by this script; older versions wrote them bare
+            if ($value -match "^'(.*)'$" -or $value -match '^"(.*)"$') { $value = $Matches[1] }
+            $keep[$key] = $value
+        }
     }
 }
 $pass = if ($env:PASS) { $env:PASS } else { $keep["PASS"] }
@@ -93,8 +98,12 @@ try {
     Remove-Item -LiteralPath $download -ErrorAction SilentlyContinue
 }
 
-# .env in UTF-8 without BOM; pcsc-rs reads it from its working directory
-$lines = @("PASS=$pass", "PCSC_UPDATED=restart") + @($keep.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" })
+# .env in UTF-8 without BOM; pcsc-rs reads it from its working directory.
+# Values go in single quotes, so spaces and symbols are read as they are; a quote cannot be.
+foreach ($value in @($pass) + @($keep.Values)) {
+    if ("$value".Contains("'")) { throw "Settings cannot contain ': $value" }
+}
+$lines = @("PASS='$pass'", "PCSC_UPDATED=restart") + @($keep.GetEnumerator() | ForEach-Object { "$($_.Key)='$($_.Value)'" })
 [IO.File]::WriteAllText($EnvFile, (($lines -join "`n") + "`n"), (New-Object Text.UTF8Encoding $false))
 if (-not $System) {
     # Only this user may read it (it holds PASS)

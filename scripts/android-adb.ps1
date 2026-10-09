@@ -88,6 +88,15 @@ function Send-File([string]$Text, [string]$RemotePath) {
     }
 }
 
+# A value from .env, without the quotes around it
+function Get-EnvValue([string[]]$Lines, [string]$Key) {
+    $line = $Lines | Where-Object { $_ -like "$Key=*" } | Select-Object -First 1
+    if (-not $line) { return "" }
+    $value = $line.Substring($Key.Length + 1)
+    if ($value -match "^'(.*)'$" -or $value -match '^"(.*)"$') { $value = $Matches[1] }
+    $value
+}
+
 function Stop-Remote {
     # Stop the loop first (it writes its own PID to loop.pid), then the client
     Invoke-Remote "test -f $Dir/loop.pid && kill `$(cat $Dir/loop.pid) 2>/dev/null; rm -f $Dir/loop.pid; pkill -x pcsc-rs 2>/dev/null; true" | Out-Null
@@ -112,6 +121,9 @@ switch ($Command) {
                 } catch {
                     Remove-Item -LiteralPath $download -ErrorAction SilentlyContinue
                     $download = $null
+                    # Try the next build only when this one is not in the release (404), not when the network failed
+                    $status = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 0 }
+                    if ($status -ne 404) { throw "Download failed ($target): $($_.Exception.Message)" }
                 }
             }
             if (-not $download) { throw "$tag has no aarch64 build for Android" }
@@ -122,12 +134,18 @@ switch ($Command) {
             Invoke-Remote "mkdir -p $Dir" | Out-Null
             # Without -Hostname or PASS, keep the ones in the installed .env
             $oldEnv = @(Invoke-Adb shell "cat $Dir/.env 2>/dev/null") | ForEach-Object { "$_".TrimEnd("`r") }
-            $pass = if ($env:PASS) { $env:PASS } else { ($oldEnv | Where-Object { $_ -like "PASS=*" } | Select-Object -First 1) -replace "^PASS=", "" }
-            if (-not $Hostname) { $Hostname = ($oldEnv | Where-Object { $_ -like "HOSTNAME=*" } | Select-Object -First 1) -replace "^HOSTNAME=", "" }
+            $pass = if ($env:PASS) { $env:PASS } else { Get-EnvValue $oldEnv "PASS" }
+            if (-not $Hostname) { $Hostname = Get-EnvValue $oldEnv "HOSTNAME" }
             if (-not $pass) { throw "Set PASS first: `$env:PASS = `"<PASS>`"" }
+            # Values go in single quotes, so spaces and symbols are read as they are; a quote cannot be
+            if ("$pass$Hostname".Contains("'")) { throw "PASS and the name cannot contain '" }
 
-            $envText = "PASS=$pass`nPCSC_UPDATED=terminate`n"
-            if ($Hostname) { $envText += "HOSTNAME=$Hostname`n" }
+            $envText = "PASS='$pass'`nPCSC_UPDATED=terminate`n"
+            if ($Hostname) { $envText += "HOSTNAME='$Hostname'`n" }
+            # Keep the other settings (PCSC_URI, DEV_MODE, ...)
+            foreach ($line in $oldEnv) {
+                if ($line -and $line -notmatch "^(PASS|PCSC_UPDATED|HOSTNAME)=") { $envText += "$line`n" }
+            }
 
             Stop-Remote
             Invoke-Adb push $Binary "$Dir/pcsc-rs" | Out-Null

@@ -99,6 +99,7 @@ curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | P
 ```
 [Unit]
 Description=PCStatus Client
+Wants=network-online.target
 After=network-online.target
 
 [Service]
@@ -106,9 +107,10 @@ Environment="PASS=npU7pmkkYfuUdKfqzm2BtDfBPEe4pizrXyPVj8Fby3KaUtehNu3ToDtM8uEdGB
 Environment="PCSC_UPDATED=terminate"
 ExecStart=/usr/local/bin/pcsc-rs
 Restart=always
+RestartSec=5
 
 [Install]
-WantedBy=network-online.target
+WantedBy=multi-user.target
 ```
 
 ```sh
