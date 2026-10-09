@@ -268,13 +268,23 @@ fn platform() -> (String, String, Option<String>) {
             crate::android::device_name().or_else(System::host_name),
         );
     }
-    (
-        System::name().unwrap_or_else(|| "Unknown OS".into()),
-        System::os_version()
-            .or_else(System::kernel_version)
-            .unwrap_or_default(),
-        System::host_name(),
-    )
+    #[cfg_attr(not(windows), allow(unused_mut))]
+    let mut name = System::name().unwrap_or_else(|| "Unknown OS".into());
+    #[cfg_attr(not(windows), allow(unused_mut))]
+    let mut version = System::os_version()
+        .or_else(System::kernel_version)
+        .unwrap_or_default();
+    // sysinfo takes the major version from CurrentMajorVersionNumber, which only
+    // exists since Windows 10, so older versions come out as "0 (2600)". Use the
+    // product name ("Microsoft Windows XP") there instead.
+    #[cfg(windows)]
+    if version.starts_with("0 ")
+        && let Some(product) = System::long_os_version()
+    {
+        version.drain(.."0 ".len());
+        name = product;
+    }
+    (name, version, System::host_name())
 }
 
 #[cfg(test)]
