@@ -18,7 +18,9 @@
 set -eu
 
 DIR=/data/local/tmp/pcsc-rs
-TARGET=aarch64-unknown-linux-musl
+# Android 版（bionic）は Android の DNS を使える。それが無い古いリリースでは musl 版を使う
+# （musl 版は /etc/resolv.conf を探すので、端末によっては DNS が引けない）
+TARGETS="aarch64-linux-android aarch64-unknown-linux-musl"
 
 command=install
 binary=
@@ -100,7 +102,14 @@ case "$command" in
       tag=$(curl -fsSL https://api.github.com/repos/Zel9278/pcsc-rs/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
       [ -n "$tag" ] || { echo "最新リリースが取れなかった" >&2; exit 1; }
       if [ -t 2 ]; then progress=--progress-bar; else progress=-sS; fi
-      curl -fL "$progress" -o "$tmp/pcsc-rs" "https://github.com/Zel9278/pcsc-rs/releases/download/$tag/pcsc-rs-$tag-$TARGET"
+      for target in $TARGETS; do
+        if curl -fL "$progress" -o "$tmp/pcsc-rs" "https://github.com/Zel9278/pcsc-rs/releases/download/$tag/pcsc-rs-$tag-$target" 2>/dev/null; then
+          echo "$tag の $target を入れる"
+          break
+        fi
+        rm -f "$tmp/pcsc-rs"
+      done
+      [ -f "$tmp/pcsc-rs" ] || { echo "$tag に aarch64 の Android 向けのファイルが無い" >&2; exit 1; }
       binary=$tmp/pcsc-rs
     fi
 
@@ -133,8 +142,14 @@ LOOP
     adb shell "chmod 755 $DIR/loop.sh"
     # サブシェルで起動して、adb shell の sh がすぐ終わるようにする（残ると adb が戻ってこない）
     adb shell "cd $DIR && (setsid $DIR/loop.sh > pcsc-rs.log 2>&1 < /dev/null &)"
-    sleep 4
-    adb shell "tail -n 6 $DIR/pcsc-rs.log"
+    # つながるか、失敗か、断られるまで待つ（更新の確認に時間がかかる端末もあるので最大 20 秒）
+    i=0
+    while [ $i -lt 20 ]; do
+      sleep 1
+      i=$((i + 1))
+      adb shell "grep -qE 'Received hi|Connection failed|refused' $DIR/pcsc-rs.log" && break
+    done
+    adb shell "tail -n 8 $DIR/pcsc-rs.log"
     ;;
   stop)
     stop_remote

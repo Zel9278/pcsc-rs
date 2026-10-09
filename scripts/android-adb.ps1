@@ -31,7 +31,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 $Dir = "/data/local/tmp/pcsc-rs"
-$Target = "aarch64-unknown-linux-musl"
+# The Android build (bionic) uses Android's DNS resolver. Older releases without it get the musl
+# build, which looks for /etc/resolv.conf and cannot resolve names on some devices.
+$Targets = @("aarch64-linux-android", "aarch64-unknown-linux-musl")
 
 if (-not (Get-Command $Adb -ErrorAction SilentlyContinue)) {
     throw "adb not found: $Adb. Install Android SDK Platform-Tools and add it to PATH, or pass -Adb <path> (or set `$env:ADB): https://developer.android.com/tools/releases/platform-tools"
@@ -101,8 +103,18 @@ switch ($Command) {
             [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
             $tag = (Invoke-RestMethod -Uri "https://api.github.com/repos/Zel9278/pcsc-rs/releases/latest" -UseBasicParsing).tag_name
             if (-not $tag) { throw "Could not get the latest release" }
-            $download = Join-Path ([IO.Path]::GetTempPath()) "pcsc-rs-$tag-$Target"
-            Invoke-WebRequest -Uri "https://github.com/Zel9278/pcsc-rs/releases/download/$tag/pcsc-rs-$tag-$Target" -OutFile $download -UseBasicParsing
+            foreach ($target in $Targets) {
+                $download = Join-Path ([IO.Path]::GetTempPath()) "pcsc-rs-$tag-$target"
+                try {
+                    Invoke-WebRequest -Uri "https://github.com/Zel9278/pcsc-rs/releases/download/$tag/pcsc-rs-$tag-$target" -OutFile $download -UseBasicParsing
+                    "Installing $tag ($target)"
+                    break
+                } catch {
+                    Remove-Item -LiteralPath $download -ErrorAction SilentlyContinue
+                    $download = $null
+                }
+            }
+            if (-not $download) { throw "$tag has no aarch64 build for Android" }
             $Binary = $download
         }
 
@@ -136,8 +148,13 @@ done
             Invoke-Remote "chmod 600 $Dir/.env; chmod 755 $Dir/pcsc-rs $Dir/loop.sh" | Out-Null
             # Start from a subshell so the adb shell process exits at once (otherwise adb never returns)
             Invoke-Remote "cd $Dir && (setsid $Dir/loop.sh > pcsc-rs.log 2>&1 < /dev/null &)" | Out-Null
-            Start-Sleep -Seconds 4
-            Invoke-Remote "tail -n 6 $Dir/pcsc-rs.log"
+            # Wait until it connects, fails or is refused (the update check is slow on some devices; 20 seconds at most)
+            for ($i = 0; $i -lt 20; $i++) {
+                Start-Sleep -Seconds 1
+                $null = Invoke-Adb shell "grep -qE 'Received hi|Connection failed|refused' $Dir/pcsc-rs.log"
+                if ($LASTEXITCODE -eq 0) { break }
+            }
+            Invoke-Remote "tail -n 8 $Dir/pcsc-rs.log"
         } finally {
             if ($download) { Remove-Item -LiteralPath $download -ErrorAction SilentlyContinue }
         }
