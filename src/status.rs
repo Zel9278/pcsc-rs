@@ -168,13 +168,27 @@ impl SystemStatus {
                 continue;
             }
             let usage = disk.usage();
+            let (read, written) = (
+                per_second(usage.read_bytes),
+                per_second(usage.written_bytes),
+            );
+            // Android only gives system-wide totals; they belong to the data partition
+            #[cfg(any(target_os = "linux", target_os = "android"))]
+            let (read, written) = if disk.mount_point() == std::path::Path::new("/data")
+                && let Some(rates) = io.system_io()
+            {
+                rates
+            } else {
+                (read, written)
+            };
             storages.push(StorageData {
-                busy: io.busy(&name),
+                // by the device, not the name shown (a mount point on Android)
+                busy: io.busy(&disk.name().to_string_lossy()),
                 name,
                 free,
                 total,
-                read: per_second(usage.read_bytes),
-                written: per_second(usage.written_bytes),
+                read,
+                written,
             });
         }
 
