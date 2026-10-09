@@ -6,7 +6,7 @@
 /// Keeps the previous counters so each sample can report the change since the last one.
 #[derive(Default)]
 pub struct Tracker {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     inner: linux::Tracker,
 }
 
@@ -18,33 +18,36 @@ impl Tracker {
     }
 
     pub fn refresh(&mut self) {
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "android"))]
         self.inner.refresh();
     }
 
     /// Percentage of CPU time spent waiting for IO since the previous refresh.
     pub fn iowait(&self) -> Option<f64> {
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "android"))]
         return self.inner.iowait;
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(not(any(target_os = "linux", target_os = "android")))]
         None
     }
 
     /// Bytes read and written per second by the whole system (zram swap is not in it).
     /// Only where per-device statistics are not readable (Android).
     pub fn system_io(&self) -> Option<(u64, u64)> {
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "android"))]
         return self.inner.system_io;
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(not(any(target_os = "linux", target_os = "android")))]
         None
     }
 
     /// Percentage of time the device (e.g. `/dev/sda1`) was busy since the previous refresh.
-    #[cfg_attr(not(target_os = "linux"), allow(clippy::unused_self))]
+    #[cfg_attr(
+        not(any(target_os = "linux", target_os = "android")),
+        allow(clippy::unused_self)
+    )]
     pub fn busy(&self, device: &str) -> Option<f64> {
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "android"))]
         return self.inner.busy(device);
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(not(any(target_os = "linux", target_os = "android")))]
         {
             let _ = device;
             None
@@ -52,7 +55,7 @@ impl Tracker {
     }
 }
 
-#[cfg(any(target_os = "linux", test))]
+#[cfg(any(target_os = "linux", target_os = "android", test))]
 mod parse {
     /// CPU time counters from the first `cpu` line of `/proc/stat`.
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -110,7 +113,7 @@ mod parse {
     }
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 mod linux {
     use std::{collections::HashMap, fs, path::Path, time::Instant};
 

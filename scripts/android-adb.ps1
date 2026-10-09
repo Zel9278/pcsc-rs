@@ -6,35 +6,71 @@
 #   .\scripts\android-adb.ps1 install                  later: keeps PASS and the name
 #   .\scripts\android-adb.ps1 install -Binary <file>   install a local build
 #   .\scripts\android-adb.ps1 stop | status | log
+#   .\scripts\android-adb.ps1 devices                 list connected devices and their serials
+#   ... -Adb C:\path\to\adb.exe (or $env:ADB) uses an adb that is not on PATH
+#   ... -Serial <serial> (or $env:ANDROID_SERIAL) picks the device: USB, or IP:port for wireless debugging
 #
 # Straight from GitHub:
 #   $env:PASS = "<PASS>"; & ([scriptblock]::Create((irm https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/scripts/android-adb.ps1))) install -Hostname my-phone
 #
-# Needs adb (Android SDK Platform-Tools) on PATH. With several devices, pick one with $env:ANDROID_SERIAL.
+# Needs adb (Android SDK Platform-Tools) on PATH, or -Adb / $env:ADB pointing at it.
+# With several devices, pick one with -Serial or $env:ANDROID_SERIAL (see "devices").
 # Same behaviour as android-adb.sh: runs detached, restarts 5 seconds after it exits
 # (crash or self-update), survives unplugging and Doze, stops on reboot.
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet("install", "stop", "status", "log")]
+    [ValidateSet("install", "stop", "status", "log", "devices")]
     [string]$Command = "install",
     [string]$Hostname,
     [string]$Binary,
-    [int]$Lines = 30
+    [int]$Lines = 30,
+    [string]$Adb = $(if ($env:ADB) { $env:ADB } else { "adb" }),
+    [string]$Serial = $env:ANDROID_SERIAL
 )
 
 $ErrorActionPreference = "Stop"
 $Dir = "/data/local/tmp/pcsc-rs"
-$Target = "aarch64-unknown-linux-musl"
+# The Android build (bionic) uses Android's DNS resolver. Older releases without it get the musl
+# build, which looks for /etc/resolv.conf and cannot resolve names on some devices.
+$Targets = @("aarch64-linux-android", "aarch64-unknown-linux-musl")
 
-if (-not (Get-Command adb -ErrorAction SilentlyContinue)) {
-    throw "adb not found. Install Android SDK Platform-Tools and add it to PATH: https://developer.android.com/tools/releases/platform-tools"
+if (-not (Get-Command $Adb -ErrorAction SilentlyContinue)) {
+    throw "adb not found: $Adb. Install Android SDK Platform-Tools and add it to PATH, or pass -Adb <path> (or set `$env:ADB): https://developer.android.com/tools/releases/platform-tools"
 }
+
+if ($Command -eq "devices") {
+    & $Adb devices -l
+    return
+}
+
+# Pick the device. Without -Serial, use the only one that is connected.
+function Get-DeviceList { @(& $Adb devices | Select-Object -Skip 1 | Where-Object { $_ -match "\S+\s+\S+" }) }
+# adb writes to stderr when the device is missing; Windows PowerShell 5.1 would turn that into a terminating error under "Stop"
+function Get-DeviceState([string]$Id) {
+    $ErrorActionPreference = "Continue"
+    ((& $Adb -s $Id get-state 2>$null) -join "").Trim()
+}
+if ($Serial) {
+    if ((Get-DeviceState $Serial) -ne "device") {
+        throw ("Device $Serial is not available (not connected or not authorized). Connected devices:`n  " + ((Get-DeviceList) -join "`n  "))
+    }
+} else {
+    $list = Get-DeviceList
+    $ready = @($list | Where-Object { $_ -match "\s+device$" })
+    if ($ready.Count -ne 1) {
+        $why = if ($ready.Count -eq 0) { "No usable device is connected (turn on USB or wireless debugging and allow this PC on the device)." } else { "$($ready.Count) devices are connected; pick one with -Serial:" }
+        if ($list | Where-Object { $_ -match "unauthorized" }) { $why += " Allow this PC on the screen of the unauthorized ones." }
+        throw ($why + $(if ($list) { "`n  " + ($list -join "`n  ") } else { "" }))
+    }
+}
+$SerialArgs = if ($Serial) { @("-s", $Serial) } else { @() }
+function Invoke-Adb { & $Adb @SerialArgs @args }
 
 # The remote command goes to adb shell as one string. Windows PowerShell 5.1 mangles
 # double quotes inside native arguments, so remote commands never use them.
 function Invoke-Remote([string]$RemoteCommand) {
-    $output = & adb shell $RemoteCommand
+    $output = Invoke-Adb shell $RemoteCommand
     if ($LASTEXITCODE -ne 0) { throw "adb shell failed: $RemoteCommand" }
     $output
 }
@@ -45,7 +81,7 @@ function Send-File([string]$Text, [string]$RemotePath) {
     $local = Join-Path ([IO.Path]::GetTempPath()) ("pcsc-rs-" + [Guid]::NewGuid().ToString("n"))
     try {
         [IO.File]::WriteAllText($local, ($Text -replace "`r`n", "`n"), (New-Object Text.UTF8Encoding $false))
-        & adb push $local $RemotePath | Out-Null
+        Invoke-Adb push $local $RemotePath | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "adb push failed: $RemotePath" }
     } finally {
         Remove-Item -LiteralPath $local -ErrorAction SilentlyContinue
@@ -67,15 +103,25 @@ switch ($Command) {
             [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
             $tag = (Invoke-RestMethod -Uri "https://api.github.com/repos/Zel9278/pcsc-rs/releases/latest" -UseBasicParsing).tag_name
             if (-not $tag) { throw "Could not get the latest release" }
-            $download = Join-Path ([IO.Path]::GetTempPath()) "pcsc-rs-$tag-$Target"
-            Invoke-WebRequest -Uri "https://github.com/Zel9278/pcsc-rs/releases/download/$tag/pcsc-rs-$tag-$Target" -OutFile $download -UseBasicParsing
+            foreach ($target in $Targets) {
+                $download = Join-Path ([IO.Path]::GetTempPath()) "pcsc-rs-$tag-$target"
+                try {
+                    Invoke-WebRequest -Uri "https://github.com/Zel9278/pcsc-rs/releases/download/$tag/pcsc-rs-$tag-$target" -OutFile $download -UseBasicParsing
+                    "Installing $tag ($target)"
+                    break
+                } catch {
+                    Remove-Item -LiteralPath $download -ErrorAction SilentlyContinue
+                    $download = $null
+                }
+            }
+            if (-not $download) { throw "$tag has no aarch64 build for Android" }
             $Binary = $download
         }
 
         try {
             Invoke-Remote "mkdir -p $Dir" | Out-Null
             # Without -Hostname or PASS, keep the ones in the installed .env
-            $oldEnv = @(& adb shell "cat $Dir/.env 2>/dev/null") | ForEach-Object { "$_".TrimEnd("`r") }
+            $oldEnv = @(Invoke-Adb shell "cat $Dir/.env 2>/dev/null") | ForEach-Object { "$_".TrimEnd("`r") }
             $pass = if ($env:PASS) { $env:PASS } else { ($oldEnv | Where-Object { $_ -like "PASS=*" } | Select-Object -First 1) -replace "^PASS=", "" }
             if (-not $Hostname) { $Hostname = ($oldEnv | Where-Object { $_ -like "HOSTNAME=*" } | Select-Object -First 1) -replace "^HOSTNAME=", "" }
             if (-not $pass) { throw "Set PASS first: `$env:PASS = `"<PASS>`"" }
@@ -84,7 +130,7 @@ switch ($Command) {
             if ($Hostname) { $envText += "HOSTNAME=$Hostname`n" }
 
             Stop-Remote
-            & adb push $Binary "$Dir/pcsc-rs" | Out-Null
+            Invoke-Adb push $Binary "$Dir/pcsc-rs" | Out-Null
             if ($LASTEXITCODE -ne 0) { throw "adb push failed" }
             Send-File $envText "$Dir/.env"
             # Restart the client 5 seconds after it exits (crash or self-update). .env is read from the working directory.
@@ -102,8 +148,13 @@ done
             Invoke-Remote "chmod 600 $Dir/.env; chmod 755 $Dir/pcsc-rs $Dir/loop.sh" | Out-Null
             # Start from a subshell so the adb shell process exits at once (otherwise adb never returns)
             Invoke-Remote "cd $Dir && (setsid $Dir/loop.sh > pcsc-rs.log 2>&1 < /dev/null &)" | Out-Null
-            Start-Sleep -Seconds 4
-            Invoke-Remote "tail -n 6 $Dir/pcsc-rs.log"
+            # Wait until it connects, fails or is refused (the update check is slow on some devices; 20 seconds at most)
+            for ($i = 0; $i -lt 20; $i++) {
+                Start-Sleep -Seconds 1
+                $null = Invoke-Adb shell "grep -qE 'Received hi|Connection failed|refused' $Dir/pcsc-rs.log"
+                if ($LASTEXITCODE -eq 0) { break }
+            }
+            Invoke-Remote "tail -n 8 $Dir/pcsc-rs.log"
         } finally {
             if ($download) { Remove-Item -LiteralPath $download -ErrorAction SilentlyContinue }
         }
@@ -113,7 +164,7 @@ done
         "Stopped"
     }
     "status" {
-        $ps = @(& adb shell "ps -A -o PID,USER,ETIME,ARGS | grep -E '^ *PID|pcsc-rs' | grep -v grep")
+        $ps = @(Invoke-Adb shell "ps -A -o PID,USER,ETIME,ARGS | grep -E '^ *PID|pcsc-rs' | grep -v grep")
         if ($ps.Count -gt 1) { $ps } else { "Not running" }
     }
     "log" {

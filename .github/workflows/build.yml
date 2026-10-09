@@ -29,6 +29,10 @@ jobs:
             os: macos-14
           - target: x86_64-pc-windows-msvc
             os: windows-2022
+          # Android's own libc (bionic): DNS goes through Android's resolver, which a
+          # static musl binary cannot use
+          - target: aarch64-linux-android
+            os: ubuntu-24.04
     runs-on: ${{ matrix.platform.os }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -41,6 +45,17 @@ jobs:
         if: ${{ endsWith(matrix.platform.target, '-unknown-linux-musl') }}
         run: |
           sudo apt-get install -y musl-tools --no-install-recommends
+      - name: Use the Android NDK
+        if: ${{ endsWith(matrix.platform.target, '-linux-android') }}
+        run: |
+          # The runner image ships the NDK; API 24 (Android 7) is the oldest Rust supports
+          ndk="$ANDROID_NDK_LATEST_HOME"
+          bin="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "ANDROID_NDK_ROOT=$ndk" >> "$GITHUB_ENV"  # for the vendored OpenSSL build
+          echo "CC_aarch64_linux_android=$bin/aarch64-linux-android24-clang" >> "$GITHUB_ENV"
+          echo "AR_aarch64_linux_android=$bin/llvm-ar" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$bin/aarch64-linux-android24-clang" >> "$GITHUB_ENV"
+          echo "$bin" >> "$GITHUB_PATH"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           filter: tree:0
