@@ -66,7 +66,7 @@ pub fn prepare_tls() {
         return;
     }
     let Some(dir) = CA_DIRS.iter().map(Path::new).find(|d| d.is_dir()) else {
-        eprintln!("No CA certificates found on this Android device");
+        elog!("No CA certificates found on this Android device");
         return;
     };
     let mut bundle = String::new();
@@ -82,7 +82,7 @@ pub fn prepare_tls() {
     }
     let path = temp_dir().join("pcsc-rs-ca.pem");
     if let Err(e) = fs::write(&path, bundle) {
-        eprintln!("Failed to write {}: {e}", path.display());
+        elog!("Failed to write {}: {e}", path.display());
         return;
     }
     // SAFETY: called at the very start, before any other thread exists.

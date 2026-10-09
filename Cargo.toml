@@ -12,6 +12,8 @@ cfg-if = "=1.0.5"
 dotenvy = "=0.15.7"
 # Only for the xp feature, which needs ring rather than aws-lc-rs
 rustls = { version = "=0.23.45", optional = true, default-features = false, features = ["ring", "std", "tls12"] }
+# The TLS handshake is done in client.rs (with a timeout) instead of inside tungstenite
+native_tls_crate = { package = "native-tls", version = "=0.2.18", optional = true }
 # Releases are bare binaries; the HTTP client and TLS come from the native-tls or xp feature
 self_update = { version = "=1.3.0", default-features = false, features = ["github"] }
 serde = { version = "=1.0.229", features = ["derive"] }
@@ -22,7 +24,13 @@ sysinfo = { version = "=0.39.6", default-features = false, features = ["componen
 [features]
 default = ["native-tls"]
 # TLS goes through native-tls for both the WebSocket and the updater
-native-tls = ["tungstenite/native-tls", "self_update/reqwest", "self_update/native-tls", "dep:openssl"]
+native-tls = [
+    "dep:native_tls_crate",
+    "tungstenite/native-tls",
+    "self_update/reqwest",
+    "self_update/native-tls",
+    "dep:openssl",
+]
 # Windows XP build (`--target i686-pc-windows-msvc --no-default-features --features xp`).
 # XP has no usable TLS stack and outdated roots, so TLS is rustls with ring and the
 # bundled Mozilla roots, and the updater uses ureq, since reqwest's rustls needs

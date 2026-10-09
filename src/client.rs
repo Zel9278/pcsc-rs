@@ -7,14 +7,20 @@
 //! password, or a client with the same hostname is already connected).
 
 use std::{
-    io::{ErrorKind, Read, Write},
-    net::TcpStream,
+    io::{self, ErrorKind, Read, Write},
+    net::{TcpStream, ToSocketAddrs},
     thread,
     time::Duration,
 };
 
 use serde::{Deserialize, Serialize};
-use tungstenite::{Message, WebSocket, stream::MaybeTlsStream};
+use tungstenite::{
+    Message, WebSocket,
+    client::IntoClientRequest,
+    error::{Error, UrlError},
+    handshake::HandshakeError,
+    stream::MaybeTlsStream,
+};
 
 use crate::{config::Config, monitor::SharedStatus, status::SystemStatus};
 
@@ -22,6 +28,9 @@ const RETRY_MIN: Duration = Duration::from_secs(5);
 const RETRY_MAX: Duration = Duration::from_secs(60);
 /// The server sends `Sync` every second; this much silence means the connection is gone.
 const READ_TIMEOUT: Duration = Duration::from_secs(30);
+/// For each address, the TLS handshake and the HTTP upgrade. A blocking socket has no
+/// timeout of its own: a path that dies mid-handshake would block the reconnect forever.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Serialize, Debug)]
 #[serde(tag = "type", content = "data")]
@@ -70,27 +79,27 @@ pub fn run(config: &Config, status: &SharedStatus) -> ! {
     loop {
         match session(config, status) {
             Ok(End::Refused) => {
-                eprintln!(
+                elog!(
                     "The server refused this client (wrong PASS, or the same hostname is already connected)"
                 );
             }
             Ok(End::Lost(true)) => {
-                println!("Disconnected");
+                log!("Disconnected");
                 wait = RETRY_MIN;
             }
-            Ok(End::Lost(false)) => println!("Disconnected"),
-            Err(e) => eprintln!("Connection failed: {e}"),
+            Ok(End::Lost(false)) => log!("Disconnected"),
+            Err(e) => elog!("Connection failed: {e}"),
         }
-        eprintln!("Reconnecting in {}s", wait.as_secs());
+        elog!("Reconnecting in {}s", wait.as_secs());
         thread::sleep(wait);
         wait = (wait * 2).min(RETRY_MAX);
     }
 }
 
 fn session(config: &Config, status: &SharedStatus) -> tungstenite::Result<End> {
-    let (mut socket, _) = tungstenite::connect(config.uri.as_str())?;
+    let mut socket = connect(config.uri.as_str())?;
     set_read_timeout(&socket)?;
-    println!("Connected");
+    log!("Connected");
 
     let mut registered = false;
     loop {
@@ -100,7 +109,7 @@ fn session(config: &Config, status: &SharedStatus) -> tungstenite::Result<End> {
                 return Ok(End::Lost(registered));
             }
             Err(e) => {
-                eprintln!("Error: {e}");
+                elog!("Error: {e}");
                 return Ok(End::Lost(registered));
             }
         };
@@ -111,7 +120,7 @@ fn session(config: &Config, status: &SharedStatus) -> tungstenite::Result<End> {
         };
         match parse(&text) {
             Ok(ServerMessage::Hi) => {
-                println!("Received hi");
+                log!("Received hi");
                 let current = status.load();
                 send(
                     &mut socket,
@@ -131,7 +140,7 @@ fn session(config: &Config, status: &SharedStatus) -> tungstenite::Result<End> {
                 return Ok(End::Refused);
             }
             Ok(ServerMessage::Other) => {}
-            Err(e) => eprintln!("Unknown message ({e}): {text}"),
+            Err(e) => elog!("Unknown message ({e}): {text}"),
         }
     }
 }
@@ -161,6 +170,79 @@ fn send<S: Read + Write>(
         result = socket.flush();
     }
     result
+}
+
+fn timed_out(what: &str) -> Error {
+    Error::Io(io::Error::new(
+        ErrorKind::TimedOut,
+        format!("{what} timed out"),
+    ))
+}
+
+/// `tungstenite::connect`, with timeouts on every step.
+fn connect(uri: &str) -> tungstenite::Result<Socket> {
+    let request = uri.into_client_request()?;
+    let tls = match request.uri().scheme_str() {
+        Some("wss") => true,
+        Some("ws") => false,
+        _ => return Err(Error::Url(UrlError::UnsupportedUrlScheme)),
+    };
+    let host = request
+        .uri()
+        .host()
+        .ok_or(Error::Url(UrlError::NoHostName))?;
+    let host = host
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .to_owned();
+    let port = request
+        .uri()
+        .port_u16()
+        .unwrap_or(if tls { 443 } else { 80 });
+
+    let mut last_error = None;
+    let mut connected = None;
+    for addr in (host.as_str(), port).to_socket_addrs()? {
+        match TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT) {
+            Ok(stream) => {
+                connected = Some(stream);
+                break;
+            }
+            Err(e) => last_error = Some(e),
+        }
+    }
+    let stream = connected.ok_or_else(|| {
+        last_error.unwrap_or_else(|| io::Error::new(ErrorKind::NotFound, "the host has no address"))
+    })?;
+    stream.set_nodelay(true)?;
+    stream.set_read_timeout(Some(CONNECT_TIMEOUT))?;
+    stream.set_write_timeout(Some(CONNECT_TIMEOUT))?;
+
+    // native-tls: tungstenite's own handshake panics when the socket times out, so do it here
+    #[cfg(feature = "native-tls")]
+    let handshake = {
+        use native_tls_crate::{HandshakeError as TlsError, TlsConnector};
+        let stream = if tls {
+            let connector = TlsConnector::new().map_err(|e| Error::Tls(e.into()))?;
+            match connector.connect(&host, stream) {
+                Ok(stream) => MaybeTlsStream::NativeTls(stream),
+                Err(TlsError::Failure(e)) => return Err(Error::Tls(e.into())),
+                // A blocking socket only "would block" when its timeout ran out
+                Err(TlsError::WouldBlock(_)) => return Err(timed_out("TLS handshake")),
+            }
+        } else {
+            MaybeTlsStream::Plain(stream)
+        };
+        tungstenite::client(request, stream)
+    };
+    // rustls (the xp build): the TLS handshake happens during the upgrade, under the same timeouts
+    #[cfg(not(feature = "native-tls"))]
+    let handshake = tungstenite::client_tls_with_config(request, stream, None, None);
+    match handshake {
+        Ok((socket, _)) => Ok(socket),
+        Err(HandshakeError::Failure(e)) => Err(e),
+        Err(HandshakeError::Interrupted(_)) => Err(timed_out("WebSocket handshake")),
+    }
 }
 
 fn set_read_timeout(socket: &Socket) -> std::io::Result<()> {
