@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.4.0](https://github.com/Zel9278/pcsc-rs/compare/v2.3.0...v2.4.0) (2026-10-09)
+
+
+### Features
+
+* Android: native build (bionic), custom adb path and device serial ([#670](https://github.com/Zel9278/pcsc-rs/issues/670)) ([3452f35](https://github.com/Zel9278/pcsc-rs/commit/3452f35434731f9c37a1032e8d6f6c85ac8447a8))
+* Windows setup scripts, for the PC itself and for Android phones ([#668](https://github.com/Zel9278/pcsc-rs/issues/668)) ([759a721](https://github.com/Zel9278/pcsc-rs/commit/759a721aebe1dd465804d5040446a89b21668f48))
+
 ## [2.3.0](https://github.com/Zel9278/pcsc-rs/compare/v2.2.0...v2.3.0) (2026-10-09)
 
 
