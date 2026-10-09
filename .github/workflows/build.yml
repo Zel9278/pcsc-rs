@@ -29,6 +29,10 @@ jobs:
             os: macos-14
           - target: x86_64-pc-windows-msvc
             os: windows-2022
+          # Windows XP and later, 32-bit
+          - target: i686-pc-windows-msvc
+            os: windows-2022
+            features: xp
           # Android's own libc (bionic): DNS goes through Android's resolver, which a
           # static musl binary cannot use
           - target: aarch64-linux-android
@@ -65,7 +69,7 @@ jobs:
       - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
         with:
           key: ${{ matrix.profile }}-${{ matrix.platform.target }}
-      - run: cargo build --locked --bins ${{ matrix.profile == 'release' && '--release' || '' }} --target ${{ matrix.platform.target }}
+      - run: cargo build --locked --bins ${{ matrix.profile == 'release' && '--release' || '' }} --target ${{ matrix.platform.target }} ${{ matrix.platform.features && format('--no-default-features --features {0}', matrix.platform.features) || '' }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ matrix.profile }}-${{ matrix.platform.target }}

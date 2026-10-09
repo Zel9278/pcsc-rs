@@ -33,7 +33,7 @@ HOSTNAME=ホスト名として表示させたい文字列
 
 ## 対応環境
 
-最近の Windows (Server 含む), macOS, Linux であれば動作すると思います。\
+最近の Windows (Server 含む), macOS, Linux であれば動作すると思います。Windows XP などの古い Windows では、32 ビット版 (`pcsc-rs-…-i686-pc-windows-msvc.exe`) を[手動で入れて](#windows)ください。\
 もし動作しない場合は [Issues](https://github.com/Zel9278/pcsc-rs/issues) から報告をお願いします。
 
 ## 使い方

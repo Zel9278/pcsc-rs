@@ -16,6 +16,8 @@ fn main() -> io::Result<()> {
             .set_icon("assets/icon.ico")
             .compile()?;
     }
+    #[cfg(feature = "xp")]
+    thunk::thunk();
     Ok(())
 }
 

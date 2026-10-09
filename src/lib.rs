@@ -14,6 +14,12 @@ mod update;
 
 pub use config::Config;
 
+// With both, tungstenite and self_update pick native-tls, which fails on XP
+#[cfg(all(feature = "native-tls", feature = "xp"))]
+compile_error!(
+    "the xp feature replaces native-tls: build with --no-default-features --features xp"
+);
+
 /// Checks for an update, starts the system monitor, keeps a connection to the
 /// PC Status server, and never returns.
 pub fn start(config: &Config) -> ! {
