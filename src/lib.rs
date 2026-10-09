@@ -21,6 +21,7 @@ macro_rules! elog {
 mod android;
 mod battery;
 mod client;
+mod cmd;
 mod config;
 mod gpu;
 mod io;

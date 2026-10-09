@@ -21,14 +21,16 @@ pub fn is_android() -> bool {
 }
 
 fn getprop(key: &str) -> Option<String> {
-    let output = Command::new(GETPROP).arg(key).output().ok()?;
-    let value = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    let output = crate::cmd::run(Command::new(GETPROP).arg(key)).ok()?;
+    let value = output.stdout.trim().to_owned();
     (!value.is_empty()).then_some(value)
 }
 
 /// The device model, e.g. `SH-M28`; Android's own hostname is just `localhost`.
 pub fn device_name() -> Option<String> {
-    getprop("ro.product.model")
+    // Fixed for the life of the process; getprop is a process each time
+    static NAME: OnceLock<Option<String>> = OnceLock::new();
+    NAME.get_or_init(|| getprop("ro.product.model")).clone()
 }
 
 /// `adb shell` exports `HOSTNAME` as the device codename (`ro.product.device`,
@@ -46,7 +48,11 @@ pub fn is_user_storage(mount_point: &Path) -> bool {
 
 /// e.g. `Android 16`.
 pub fn os_name() -> Option<String> {
-    getprop("ro.build.version.release").map(|release| format!("Android {release}"))
+    static NAME: OnceLock<Option<String>> = OnceLock::new();
+    NAME.get_or_init(|| {
+        getprop("ro.build.version.release").map(|release| format!("Android {release}"))
+    })
+    .clone()
 }
 
 /// `/tmp` does not exist on Android; Termux sets `TMPDIR`, `adb shell` can write here.
