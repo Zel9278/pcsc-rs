@@ -119,6 +119,34 @@ sudo systemctl enable --now pcsc-rs
 
 </details>
 
+#### Raspberry Pi Zero / Zero 2
+
+Raspberry Pi Zero系は、OSのビット数に応じて次のリリースバイナリを使用します。
+
+| 端末・OS | `uname -m` | Rust target |
+|---|---|---|
+| Pi Zero / Zero W（32-bit OS） | `armv6l` | `arm-unknown-linux-musleabi` |
+| Pi Zero 2 W（32-bit OS） | `armv7l` | `armv7-unknown-linux-musleabi` |
+| Pi Zero 2 W（64-bit OS） | `aarch64` | `aarch64-unknown-linux-musl` |
+
+Raspberry Pi OSでは、Pi Zeroは32-bit OSを使用してください。Pi Zero 2 Wは32-bitと
+64-bitのどちらでも動作します。Pi Zero向けARMバイナリは静的リンクされているため、
+追加のRustやOpenSSLライブラリは不要です。
+
+Linux用インストーラーは`uname -m`を自動判定します。
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh |
+  PASS=<PASS> sh
+```
+
+自動更新は行いません。新しいバージョンを使う場合は、同じコマンドを再実行してください。
+手元でビルドする場合は、Windowsでは
+`.\scripts\build-android-local.ps1 arm32`、WSL/Linuxでは
+`scripts/build-android-local.sh arm32`を実行し、Pi Zeroは
+`target/arm-unknown-linux-musleabi/release/pcsc-rs`、Pi Zero 2は
+`target/armv7-unknown-linux-musleabi/release/pcsc-rs`を使用します。
+
 ### macOS
 
 Linux と同じコマンドで最新のリリースを入れ、launchd に登録して起動します。ログイン時に起動し、終了したら（更新のあとも）起動し直します。
@@ -166,7 +194,7 @@ curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | s
 
 #### PC から adb で
 
-root なしで、PC から adb で入れます（[scripts/android-adb.sh](scripts/android-adb.sh)）。adb shell の権限で動くので、CPU（コアごと）・GPU（Adreno）・ロードアベレージも取れます。
+root なしで、PC から adb で入れます（[scripts/android-adb.sh](scripts/android-adb.sh)）。adb shell の権限で動くので、CPU（コアごと）・GPU（Adreno）・ロードアベレージも取れます。古い Android で CPU/GPU の sysfs 名が取得できない場合も、SoC 名や `/proc/cpuinfo` から `Krait`、`Cortex-A53`、`Adreno 330` などを補完します。
 
 ```sh
 # USB か、無線デバッグ（adb pair / adb connect）でつないでから
@@ -213,6 +241,9 @@ $env:PASS = "<PASS>"; .\scripts\android-adb.ps1 install -Hostname 表示した�
   `.\scripts\build-android-local.ps1 arm32`、両方のAPKまで作る場合は
   `.\scripts\build-android-local.ps1 apk`を実行します。PowerShell版のARM32/APKビルドには
   WSL（Rustと`cross`を導入済み）およびDocker DesktopのWSL統合が必要です。
+  既定のディストリビューションは`Lavuntu`です。別のディストリビューションを使う場合は
+  `-WslDistribution Ubuntu`のように指定してください。ビルドはDocker内のARM用GCCが
+  並列時に不安定な古い環境にも対応するため、既定で1ジョブずつ実行します。
 
 ### Nix
 

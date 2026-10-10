@@ -141,14 +141,10 @@ impl SystemStatus {
                 let load = System::load_average();
                 let loadavg = [load.one, load.five, load.fifteen];
             }
-        }
+        };
 
         let cpu = CpuData {
-            model: system
-                .cpus()
-                .first()
-                .map(|c| c.brand().to_owned())
-                .unwrap_or_default(),
+            model: cpu_model(system),
             cpus: system.cpus().iter().map(Into::into).collect(),
         };
 
@@ -181,6 +177,19 @@ impl SystemStatus {
             histories: [],
         }
     }
+}
+
+fn cpu_model(system: &System) -> String {
+    let model = system
+        .cpus()
+        .first()
+        .map(|c| c.brand().trim().to_owned())
+        .unwrap_or_default();
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    if model.is_empty() {
+        return crate::android::cpu_model().unwrap_or(model);
+    }
+    model
 }
 
 fn storages(disks: &Disks, io: &io::Tracker, interval: Duration) -> Vec<StorageData> {

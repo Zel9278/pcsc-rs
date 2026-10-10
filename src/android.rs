@@ -1,5 +1,6 @@
-//! Running the Linux build on Android (from `adb shell` or Termux). Android is
-//! detected at run time, so the same static musl binary works on both.
+//! Running the Linux build on Android (from `adb shell` or Termux) and
+//! ARM Linux boards. Android is detected at run time, so the same static musl
+//! binary works on both.
 
 use std::{
     env, fs,
@@ -24,6 +25,96 @@ fn getprop(key: &str) -> Option<String> {
     let output = crate::cmd::run(Command::new(GETPROP).arg(key)).ok()?;
     let value = output.stdout.trim().to_owned();
     (!value.is_empty()).then_some(value)
+}
+
+/// The CPU brand is often empty in sysinfo on old Android releases. Prefer
+/// the SoC-specific name, then fall back to the CPU part from `/proc/cpuinfo`.
+pub fn cpu_model() -> Option<String> {
+    static MODEL: OnceLock<Option<String>> = OnceLock::new();
+    MODEL
+        .get_or_init(|| {
+            let platform = getprop("ro.board.platform")
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            let soc_model = if platform.starts_with("msm8974") || platform.starts_with("apq8074") {
+                Some("Krait 400")
+            } else if platform.starts_with("msm8960") || platform.starts_with("msm8930") {
+                Some("Krait")
+            } else {
+                None
+            };
+            soc_model.map(str::to_owned).or_else(|| cpu_part_model())
+        })
+        .clone()
+}
+
+fn cpu_part_model() -> Option<String> {
+    let cpuinfo = fs::read_to_string("/proc/cpuinfo").ok()?;
+    let implementer = cpuinfo
+        .lines()
+        .find_map(|line| line.strip_prefix("CPU implementer")?.split(':').nth(1))
+        .and_then(|value| parse_hex(value.trim()))?;
+    let part = cpuinfo
+        .lines()
+        .find_map(|line| line.strip_prefix("CPU part")?.split(':').nth(1))
+        .and_then(|value| parse_hex(value.trim()))?;
+    let name = match (implementer, part) {
+        (0x41, 0xB76) => "ARM1176JZF-S",
+        (0x41, 0xC05) => "Cortex-A5",
+        (0x41, 0xC07) => "Cortex-A7",
+        (0x41, 0xC08) => "Cortex-A8",
+        (0x41, 0xC09) => "Cortex-A9",
+        (0x41, 0xC0D) => "Cortex-A12",
+        (0x41, 0xC0E) => "Cortex-A17",
+        (0x41, 0xC0F) => "Cortex-A15",
+        (0x41, 0xD03) => "Cortex-A53",
+        (0x41, 0xD04) => "Cortex-A35",
+        (0x41, 0xD05) => "Cortex-A55",
+        (0x41, 0xD08) => "Cortex-A72",
+        (0x41, 0xD09) => "Cortex-A73",
+        (0x41, 0xD0A) => "Cortex-A75",
+        (0x41, 0xD0B) => "Cortex-A76",
+        (0x41, 0xD0D) => "Cortex-A77",
+        (0x41, 0xD41) => "Cortex-A78",
+        (0x51, 0x06F) => "Krait",
+        _ => return None,
+    };
+    Some(name.into())
+}
+
+fn parse_hex(value: &str) -> Option<u32> {
+    u32::from_str_radix(value.strip_prefix("0x").unwrap_or(value), 16).ok()
+}
+
+/// Old Qualcomm kernels do not expose `gpu_model` in KGSL. Infer the Adreno
+/// model from the board platform when the sysfs name is unavailable.
+pub fn gpu_model() -> Option<String> {
+    static MODEL: OnceLock<Option<String>> = OnceLock::new();
+    MODEL
+        .get_or_init(|| {
+            let platform = getprop("ro.board.platform")?.to_ascii_lowercase();
+            let model = if platform.starts_with("msm8974") || platform.starts_with("apq8074") {
+                "Adreno 330"
+            } else if platform.starts_with("msm8960") {
+                "Adreno 225"
+            } else if platform.starts_with("msm8930") {
+                "Adreno 305"
+            } else if platform.starts_with("msm8994") {
+                "Adreno 430"
+            } else if platform.starts_with("msm8992") {
+                "Adreno 418"
+            } else if platform.starts_with("msm8996") {
+                "Adreno 530"
+            } else if platform.starts_with("msm8998") {
+                "Adreno 540"
+            } else if platform.starts_with("msm8953") {
+                "Adreno 506"
+            } else {
+                return None;
+            };
+            Some(model.into())
+        })
+        .clone()
 }
 
 /// The device model, e.g. `SH-M28`; Android's own hostname is just `localhost`.

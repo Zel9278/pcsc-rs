@@ -13,6 +13,9 @@ arch=$(uname -m)
 case "$os/$arch" in
   Linux/x86_64) target=x86_64-unknown-linux-musl ;;
   Linux/aarch64) target=aarch64-unknown-linux-musl ;;
+  # Raspberry Pi Zero (ARMv6), Zero 2 (ARMv7), and 64-bit Zero 2 OS.
+  Linux/armv6l) target=arm-unknown-linux-musleabi ;;
+  Linux/armv7l) target=armv7-unknown-linux-musleabi ;;
   Darwin/arm64) target=aarch64-apple-darwin ;;
   Darwin/x86_64) target=x86_64-apple-darwin ;;
   *) echo "未対応の環境: $os $arch" >&2; exit 1 ;;

@@ -169,6 +169,11 @@ mod mobile {
         // Busy time and total time since the previous read (reading resets them)
         let busy = fs::read_to_string(format!("{KGSL}/gpubusy")).ok()?;
         let model = fs::read_to_string(format!("{KGSL}/gpu_model")).unwrap_or_default();
+        let model = if model.trim().is_empty() {
+            crate::android::gpu_model().unwrap_or_default()
+        } else {
+            model
+        };
         Some((name(model.trim()), usage(&busy)?))
     }
 

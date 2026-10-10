@@ -14,6 +14,17 @@ repo_root="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 build_kind="${1:-android64}"
 compile_sdk="${ANDROID_COMPILE_SDK:-37}"
 
+if [ "${HOME:-}" != /* ]; then
+  HOME="$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f6 || true)"
+  export HOME
+fi
+if [ -d "$HOME/.cargo-lavuntu/bin" ]; then
+  export CARGO_HOME="$HOME/.cargo-lavuntu"
+  export RUSTUP_HOME="$HOME/.rustup-lavuntu"
+fi
+export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$HOME/.cargo/bin:$PATH"
+export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-1}"
+
 case "$build_kind" in
   android64)
     targets="aarch64-linux-android"

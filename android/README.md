@@ -39,6 +39,9 @@ On a Windows host, run the PowerShell equivalent from the repository root:
 builds or `apk` to build both APKs. The PowerShell script uses the Windows NDK
 toolchain directly for ARM64 and delegates ARMv6/ARMv7 builds to WSL. The latter
 requires Rust, `cross`, and Docker Desktop WSL integration in the selected WSL distribution.
+The default distribution is `Lavuntu`; pass `-WslDistribution <name>` to use another
+distribution. ARM32 builds use one Cargo job by default because older cross images can
+otherwise crash their ARM GCC under parallel compilation.
 
 Without the signing variables below the release APK is signed with the debug key.
 
@@ -66,3 +69,7 @@ The PC-side ADB flow covers Android 2.3.3 through 6.x (API 10 through 23): it us
 musl ARMv6/ARMv7 clients on 32-bit devices and the API 21 `aarch64-linux-android` client on
 64-bit devices. The legacy client does not perform self-updates; run `install` from the PC to
 install a newer client.
+
+The same static ARMv6/ARMv7 Linux clients also run on Raspberry Pi Zero and Zero 2:
+`arm-unknown-linux-musleabi` is for `armv6l`, and `armv7-unknown-linux-musleabi` is for
+`armv7l`. They are not Android-only binaries; Android detection is performed at runtime.
