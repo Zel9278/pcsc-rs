@@ -11,12 +11,15 @@
 
 ## 作業ツリーの現状
 
-作業ディレクトリは `C:\Users\SHINA\Documents\GitHub\pcsc-rs2`。下記の変更は未コミットで、現状まだAPK成果物は作成できていない。
+作業ディレクトリは `C:\Users\SHINA\Documents\GitHub\pcsc-rs2`。下記の変更は未コミット。
+ローカル環境でARM64・ARMv6・ARMv7のビルドと、現行・legacy両APKのreleaseビルドまで確認済み。
 
 変更ファイル:
 
 - `.github/workflows/build.yml`
+- `scripts/build-android-local.sh`
 - `Cargo.toml`
+- `android/.gitignore`
 - `android/README.md`
 - `android/settings.gradle.kts`
 - `android/legacy/` 以下（API 10用の新規Androidアプリ）
@@ -58,33 +61,42 @@
 
 - `cargo fmt` を実行。
 - `git diff --check` を実行し、空白エラーなし。
+- `cargo check --locked --no-default-features --features android-legacy` 成功。
+- `cargo test --locked --no-default-features --features android-legacy` 成功（24件）。
+- `scripts/build-android-local.sh` のBash構文チェック成功。
+- ARM64 Android、ARMv6 musl、ARMv7 muslのreleaseビルド成功。
+- 現行APKとlegacy APKのreleaseビルド成功。
+- legacy APKは`minSdkVersion=10`、`targetSdkVersion=23`で、ARMv6/ARMv7 payloadを含むことを確認。
 - ソースの目視レビューで常駐起動ループが `.env` をシェルsourceしようとしていた箇所を除去。アプリ本体は `src/main.rs` の `dotenvy::from_path_iter` で `.env` を読むため、シェルsourceは不要。
 - 設定ファイル読み込みと、Android側のlaunch/boot処理を目視で確認。
 
 ## 未実施・未確認のこと（重要）
 
-1. **APKをまだビルドしていない。** この環境では必要なJDK 21 / Android NDKなどを用意できず、Gradleビルドは未確認。root端末向けAPI 10 APKを実機にインストールできるかも未確認。N-06CはAPKではなくPC側adbを使う。
-2. **aarch64/ARMv6/ARMv7のRustビルドは未確認。** とくにrustlsが依存するringのARMv6サポート/アセンブリ選択がリスク。CIでAPI 21のaarch64と両32bitターゲットを実際にビルドすること。
-3. **N-06Cでの起動・TLS・通信・DNS・adb shell動作は未確認。** `adb shell` の常駐化、`pidof` / `tail` 等の古いtoolbox実装差を実機で確認すること。
-4. **カーネル互換性リスク。** N-06CのLinux 2.6.35カーネルはmuslがPOSIX準拠を想定する2.6.39以降を下回る。adb shellで実行できる可能性はあるが、実機検証なしに動作保証しない。Android 5〜6のaarch64はAPI 21ビルドを使う。
-5. **旧APKの更新。** 旧APKは自動更新を行わない。新しいクライアントは新しいAPKを配布して更新する。
-6. **ARMv6を含む両方のABIが本当にAPKに入ること。** `checkLegacyClients` は両assetsを必須とする。CIのartifact download先と `debug` / `release` の配置を確認する。
-7. **署名・配布。** リリースAPKは既存keystore secretsの設定が必要。PRのdebug署名APKは正式配布用ではない。
-8. **GitHub Actions YAMLの実行確認がない。** workflow expressions、`cross` の実行環境、artifactディレクトリの実体、Android Gradle Plugin 9.4.1でAPI 10向けAPKを生成できるか確認する。
+1. **N-06Cでの起動・TLS・通信・DNS・adb shell動作は未確認。** `adb shell` の常駐化、`pidof` / `tail` 等の古いtoolbox実装差を実機で確認すること。
+2. **カーネル互換性リスク。** N-06CのLinux 2.6.35カーネルはmuslがPOSIX準拠を想定する2.6.39以降を下回る。adb shellで実行できる可能性はあるが、実機検証なしに動作保証しない。Android 5〜6のaarch64はAPI 21ビルドを使う。
+3. **旧APKの更新。** 旧APKは自動更新を行わない。新しいクライアントは新しいAPKを配布して更新する。
+4. **署名・配布。** リリースAPKは既存keystore secretsの設定が必要。ローカルのdebug署名APKは正式配布用ではない。
+5. **GitHub Actions YAMLの実行確認がない。** workflow expressions、`cross` の実行環境、artifactディレクトリの実体はGitHub Actions上では未確認。
 
 ## 次に行う作業（推奨順）
 
 1. `ANDROID_LEGACY_HANDOFF.md` と現在の差分を読んで作業を再開する。
-2. CIを回すか同等環境で以下を順番に実行し、最初の失敗を解消する。
+2. ローカルで以下を順番に実行し、最初の失敗を解消する。
+   - `scripts/build-android-local.sh android64`
+   - `scripts/build-android-local.sh arm32`
+   - WindowsではAndroid Studio付属JDK 21とAndroid SDK Platform 37でAPKをビルドする。
+     `android\gradlew.bat --no-daemon --max-workers=2 :app:assembleRelease :legacy:assembleRelease`
+     （`android/legacy/src/main/assets`と`android/app/src/main/jniLibs`へ先にバイナリを配置する。）
+3. WSLのDocker Desktop連携が有効なら、以下の個別コマンドでも確認できる。
    - `cargo build --locked --bins --release --target aarch64-linux-android --no-default-features --features android-legacy`
    - `cross build --locked --bins --release --target arm-unknown-linux-musleabi --no-default-features --features android-legacy`
    - `cross build --locked --bins --release --target armv7-unknown-linux-musleabi --no-default-features --features android-legacy`
    - 2成果物を `android/legacy/src/main/assets/bin/armeabi/pcsc-rs` と `armeabi-v7a/pcsc-rs` に配置。
    - Java 21 + Android SDK 37で `./gradlew :legacy:assembleRelease`。
-3. APKをzipとして確認し、ManifestのminSdkが10、両ARM payloadが存在することを検証。
-4. N-06Cなどの実機でADB許可・バイナリ配置・起動/停止・接続・TLS・DNSを確認。再起動後はADBから再度`install`する。
-5. ringがARMv6ビルドを拒否する場合は、ARMv6 TLS依存を別方式にするか、機能差を明記してARMv6側の提供仕様を再検討。確認前にARMv6対応済みと断定しない。
-6. `scripts/android-adb.sh` / `.ps1` のログ/停止処理をAndroid 2.3〜6.xのtoolbox環境で確認し、プロセス残留や二重起動がないか見る。
+4. APKをzipとして確認し、ManifestのminSdkが10、両ARM payloadが存在することを検証。
+5. N-06Cなどの実機でADB許可・バイナリ配置・起動/停止・接続・TLS・DNSを確認。再起動後はADBから再度`install`する。
+6. ringがARMv6ビルドを拒否する場合は、ARMv6 TLS依存を別方式にするか、機能差を明記してARMv6側の提供仕様を再検討。確認前にARMv6対応済みと断定しない。
+7. `scripts/android-adb.sh` / `.ps1` のログ/停止処理をAndroid 2.3〜6.xのtoolbox環境で確認し、プロセス残留や二重起動がないか見る。
 
 ## 参照情報
 

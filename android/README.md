@@ -10,7 +10,7 @@ The client binary goes into the APK as `libpcsc.so`, so Android extracts it next
 where root or the shell user can copy it from:
 
 ```sh
-# The Android build of the client (the CI builds it with the NDK, API 21)
+# The Android build of the client (the local script uses the NDK, API 21)
 cargo build --release --target aarch64-linux-android --no-default-features --features android-legacy
 mkdir -p android/app/src/main/jniLibs/arm64-v8a
 cp target/aarch64-linux-android/release/pcsc-rs android/app/src/main/jniLibs/arm64-v8a/libpcsc.so
@@ -20,6 +20,19 @@ cd android
 ```
 
 Needs JDK 17 or later and the Android SDK (`ANDROID_HOME`, or `sdk.dir` in `local.properties`).
+
+For a local build from WSL, install Rust and the Android SDK command-line tools,
+then run `scripts/build-android-local.sh android64` from the repository root.
+The script detects the newest installed NDK and configures the API 21 linker.
+Use `scripts/build-android-local.sh arm32` for the ARMv6/ARMv7 static builds;
+that mode requires `cross` and a running Docker daemon. In WSL, enable Docker
+Desktop integration for the selected WSL distribution; calling `docker.exe`
+without WSL integration does not provide the bind mounts required by `cross`.
+To build both APKs locally, run `scripts/build-android-local.sh apk`. This also copies
+the binaries into the APK modules and runs Gradle with at most two workers. The current
+Compose dependencies require Android SDK Platform 37; install it if it is not present.
+The resulting files are `android/app/build/outputs/apk/release/app-release.apk` and
+`android/legacy/build/outputs/apk/release/legacy-release-unsigned.apk`.
 
 Without the signing variables below the release APK is signed with the debug key.
 

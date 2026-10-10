@@ -5,3 +5,5 @@ local.properties
 *.keystore
 # The client binary is copied in before the build (see app/build.gradle.kts)
 app/src/main/jniLibs/
+# Legacy clients are copied in before the build (see legacy/build.gradle.kts)
+legacy/src/main/assets/bin/

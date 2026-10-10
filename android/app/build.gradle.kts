@@ -13,11 +13,11 @@ val (major, minor, patch) = cargoVersion.split('.').map { it.toInt() }
 
 android {
     namespace = "io.github.zel9278.pcscrs"
-    compileSdk = 37
+    compileSdk = providers.gradleProperty("android.compileSdk").map { it.toInt() }.getOrElse(37)
 
     defaultConfig {
         applicationId = "io.github.zel9278.pcscrs"
-        // The client is built for API 24 (see the aarch64-linux-android build)
+        // The client is built for API 21 (see the aarch64-linux-android build)
         minSdk = 24
         targetSdk = 36
         versionCode = major * 1_000_000 + minor * 1_000 + patch

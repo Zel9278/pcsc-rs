@@ -9,7 +9,7 @@ val (major, minor, patch) = cargoVersion.split('.').map { it.toInt() }
 
 android {
     namespace = "io.github.zel9278.pcscrs.legacy"
-    compileSdk = 37
+    compileSdk = providers.gradleProperty("android.compileSdk").map { it.toInt() }.getOrElse(37)
 
     defaultConfig {
         applicationId = "io.github.zel9278.pcscrs.legacy"
@@ -24,6 +24,10 @@ android {
         release {
             isMinifyEnabled = false
         }
+    }
+
+    lint {
+        disable += "ExpiredTargetSdkVersion"
     }
 
     compileOptions {

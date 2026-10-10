@@ -195,6 +195,10 @@ $env:PASS = "<PASS>"; & ([scriptblock]::Create((irm https://raw.githubuserconten
   N-06CではUSBデバッグを有効にして、端末でこのPCのRSA鍵を許可してください。
 - Android 2.3.3〜6.x向けクライアントは自動更新を行いません。新しいリリースを使うときは、
   PCからもう一度`install`してください。
+- GitHub Actionsを使わずローカルでビルドする場合は、WSLで
+  `scripts/build-android-local.sh android64`を実行できます。ARMv6/ARMv7向けは
+  `scripts/build-android-local.sh arm32`を使い、`cross`とDockerが必要です。
+  両方のAPKまで作る場合は`./scripts/build-android-local.sh apk`を実行します。
 
 ### Nix
 

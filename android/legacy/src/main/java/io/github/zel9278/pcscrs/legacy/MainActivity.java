@@ -1,4 +1,4 @@
-﻿package io.github.zel9278.pcscrs.legacy;
+package io.github.zel9278.pcscrs.legacy;
 
 import android.app.Activity;
 import android.os.Bundle;
