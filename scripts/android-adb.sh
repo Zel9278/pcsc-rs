@@ -1,7 +1,7 @@
 #!/bin/sh
 # Android で pcsc-rs を動かし続ける（PC から adb で入れる）。root は要らない。
 #
-#   PASS=<PASS> scripts/android-adb.sh install    最新のリリース（aarch64 musl）を入れて起動する
+#   PASS=<PASS> scripts/android-adb.sh install    端末に合う最新リリースを入れて起動する
 #   scripts/android-adb.sh install                2回目以降は、入っている PASS のまま入れ直す
 #   scripts/android-adb.sh install --binary <file> 手元でビルドしたものを入れる
 #   scripts/android-adb.sh install --hostname <名前> PC Status に出す名前（既定は機種名。例: SH-M28）
@@ -12,7 +12,7 @@
 #
 # adb shell の権限で動くので、CPU（コアごと）・GPU（Adreno）・ロードアベレージも取れる。
 # 端末から切り離して動かすので、ケーブルを抜いても・画面を消して Doze に入っても止まらない。
-# 落ちたとき・自動更新で終わったときは 5 秒後に起動し直す。
+# 落ちたときは 5 秒後に起動し直す。
 # 端末を再起動すると止まるので、もう一度 install する（USB か、無線デバッグの adb connect で）。
 # 端末が複数つながっているときは --serial か ANDROID_SERIAL で選ぶ（devices で一覧が出る）。
 set -eu
@@ -20,8 +20,6 @@ set -eu
 DIR=/data/local/tmp/pcsc-rs
 # Android 版（bionic）は Android の DNS を使える。それが無い古いリリースでは musl 版を使う
 # （musl 版は /etc/resolv.conf を探すので、端末によっては DNS が引けない）
-TARGETS="aarch64-linux-android aarch64-unknown-linux-musl"
-
 command=install
 binary=
 hostname=
@@ -85,15 +83,28 @@ adb() {
 
 stop_remote() {
   # ループ（PID はループ自身が loop.pid に書く）を先に止めてから、本体を止める
-  adb shell "test -f $DIR/loop.pid && kill \$(cat $DIR/loop.pid) 2>/dev/null; rm -f $DIR/loop.pid; pkill -x pcsc-rs 2>/dev/null; true"
+  adb shell "test -f $DIR/loop.pid && kill \$(cat $DIR/loop.pid) 2>/dev/null; rm -f $DIR/loop.pid; kill \$(pidof pcsc-rs) 2>/dev/null; true"
 }
 
 case "$command" in
   install)
 
-    case "$(adb shell uname -m | tr -d '\r')" in
-      aarch64) ;;
-      *) echo "未対応のアーキテクチャ（aarch64 だけ）" >&2; exit 1 ;;
+    abi=$(adb shell getprop ro.product.cpu.abi | tr -d '\r')
+    [ -n "$abi" ] || abi=$(adb shell uname -m | tr -d '\r')
+    case "$abi" in
+      aarch64 | arm64-v8a)
+        targets="aarch64-linux-android aarch64-unknown-linux-musl"
+        ;;
+      armv7l | armeabi-v7a)
+        targets="armv7-unknown-linux-musleabi"
+        ;;
+      armv6l | armeabi | arm)
+        targets="arm-unknown-linux-musleabi"
+        ;;
+      *)
+        echo "未対応のアーキテクチャ: $abi（aarch64、armeabi-v7a、armeabi に対応）" >&2
+        exit 1
+        ;;
     esac
 
     tmp=$(mktemp -d)
@@ -102,7 +113,7 @@ case "$command" in
       tag=$(curl -fsSL https://api.github.com/repos/Zel9278/pcsc-rs/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
       [ -n "$tag" ] || { echo "最新リリースが取れなかった" >&2; exit 1; }
       if [ -t 2 ]; then progress=--progress-bar; else progress=-sS; fi
-      for target in $TARGETS; do
+      for target in $targets; do
         # 次の候補に進むのはファイルが無いとき（404）だけ。通信の失敗で musl 版に切り替わらないように
         code=$(curl -L "$progress" -o "$tmp/pcsc-rs" -w '%{http_code}' "https://github.com/Zel9278/pcsc-rs/releases/download/$tag/pcsc-rs-$tag-$target") || {
           echo "ダウンロードに失敗した（$target）" >&2
@@ -115,7 +126,7 @@ case "$command" in
         rm -f "$tmp/pcsc-rs"
         [ "$code" = 404 ] || { echo "ダウンロードに失敗した（$target: HTTP $code）" >&2; exit 1; }
       done
-      [ -f "$tmp/pcsc-rs" ] || { echo "$tag に aarch64 の Android 向けのファイルが無い" >&2; exit 1; }
+      [ -f "$tmp/pcsc-rs" ] || { echo "$tag に $abi 向けのファイルが無い" >&2; exit 1; }
       binary=$tmp/pcsc-rs
     fi
 
@@ -154,8 +165,8 @@ while true; do
 done
 LOOP
     adb shell "chmod 755 $DIR/loop.sh"
-    # サブシェルで起動して、adb shell の sh がすぐ終わるようにする（残ると adb が戻ってこない）
-    adb shell "cd $DIR && (setsid $DIR/loop.sh > pcsc-rs.log 2>&1 < /dev/null &)"
+    # すべての入出力を切り離して起動し、古いAndroid toolboxにないsetsidは使わない
+    adb shell "cd $DIR && ($DIR/loop.sh > pcsc-rs.log 2>&1 < /dev/null &)"
     # つながるか、失敗か、断られるまで待つ（更新の確認に時間がかかる端末もあるので最大 20 秒）
     i=0
     while [ $i -lt 20 ]; do

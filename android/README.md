@@ -39,9 +39,9 @@ The app's version is the client's (`Cargo.toml`).
 ## Older Android (Gingerbread)
 
 The separate `legacy` APK targets Android 2.3 (API 10) and bundles 32-bit ARMv6 and ARMv7
-static clients. It requires root and retains the password, hostname, server URI, status, start,
-stop, and start-after-reboot controls. Shizuku and wireless-debugging pairing are unavailable
-on Gingerbread. The N-06C uses the ARMv7 APK payload.
+static clients. It requires root. On an unrooted phone such as the N-06C, use the PC-side
+`scripts/android-adb.sh` or `scripts/android-adb.ps1` flow documented in the main README
+instead; it runs as the adb shell user and does not require an APK.
 
 The legacy client is built with the `android-legacy` Rust feature and musl targets. The APK
 installer extracts the matching client from its assets and copies it to `/data/local/tmp/pcsc-rs`.

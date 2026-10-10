@@ -16,7 +16,7 @@
 # Needs adb (Android SDK Platform-Tools) on PATH, or -Adb / $env:ADB pointing at it.
 # With several devices, pick one with -Serial or $env:ANDROID_SERIAL (see "devices").
 # Same behaviour as android-adb.sh: runs detached, restarts 5 seconds after it exits
-# (crash or self-update), survives unplugging and Doze, stops on reboot.
+# (crash), survives unplugging and Doze, stops on reboot.
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
@@ -33,8 +33,6 @@ $ErrorActionPreference = "Stop"
 $Dir = "/data/local/tmp/pcsc-rs"
 # The Android build (bionic) uses Android's DNS resolver. Older releases without it get the musl
 # build, which looks for /etc/resolv.conf and cannot resolve names on some devices.
-$Targets = @("aarch64-linux-android", "aarch64-unknown-linux-musl")
-
 if (-not (Get-Command $Adb -ErrorAction SilentlyContinue)) {
     throw "adb not found: $Adb. Install Android SDK Platform-Tools and add it to PATH, or pass -Adb <path> (or set `$env:ADB): https://developer.android.com/tools/releases/platform-tools"
 }
@@ -99,13 +97,22 @@ function Get-EnvValue([string[]]$Lines, [string]$Key) {
 
 function Stop-Remote {
     # Stop the loop first (it writes its own PID to loop.pid), then the client
-    Invoke-Remote "test -f $Dir/loop.pid && kill `$(cat $Dir/loop.pid) 2>/dev/null; rm -f $Dir/loop.pid; pkill -x pcsc-rs 2>/dev/null; true" | Out-Null
+    Invoke-Remote "test -f $Dir/loop.pid && kill `$(cat $Dir/loop.pid) 2>/dev/null; rm -f $Dir/loop.pid; kill `$(pidof pcsc-rs) 2>/dev/null; true" | Out-Null
 }
 
 switch ($Command) {
     "install" {
-        $arch = ((Invoke-Remote "uname -m") -join "").Trim()
-        if ($arch -ne "aarch64") { throw "Unsupported architecture (aarch64 only): $arch" }
+        $abi = ((Invoke-Remote "getprop ro.product.cpu.abi") -join "").Trim()
+        if (-not $abi) { $abi = ((Invoke-Remote "uname -m") -join "").Trim() }
+        if ($abi -eq "aarch64" -or $abi -eq "arm64-v8a") {
+            $Targets = @("aarch64-linux-android", "aarch64-unknown-linux-musl")
+        } elseif ($abi -eq "armv7l" -or $abi -eq "armeabi-v7a") {
+            $Targets = @("armv7-unknown-linux-musleabi")
+        } elseif ($abi -eq "armv6l" -or $abi -eq "armeabi" -or $abi -eq "arm") {
+            $Targets = @("arm-unknown-linux-musleabi")
+        } else {
+            throw "Unsupported architecture: $abi (supported: aarch64, armeabi-v7a, armeabi)"
+        }
 
         $download = $null
         if (-not $Binary) {
@@ -126,7 +133,7 @@ switch ($Command) {
                     if ($status -ne 404) { throw "Download failed ($target): $($_.Exception.Message)" }
                 }
             }
-            if (-not $download) { throw "$tag has no aarch64 build for Android" }
+            if (-not $download) { throw "$tag has no build for Android ABI $abi" }
             $Binary = $download
         }
 
@@ -151,7 +158,7 @@ switch ($Command) {
             Invoke-Adb push $Binary "$Dir/pcsc-rs" | Out-Null
             if ($LASTEXITCODE -ne 0) { throw "adb push failed" }
             Send-File $envText "$Dir/.env"
-            # Restart the client 5 seconds after it exits (crash or self-update). .env is read from the working directory.
+            # Restart the client 5 seconds after it exits (crash). .env is read from the working directory.
             Send-File @'
 #!/system/bin/sh
 cd "$(dirname "$0")" || exit 1
@@ -164,8 +171,8 @@ while true; do
 done
 '@ "$Dir/loop.sh"
             Invoke-Remote "chmod 600 $Dir/.env; chmod 755 $Dir/pcsc-rs $Dir/loop.sh" | Out-Null
-            # Start from a subshell so the adb shell process exits at once (otherwise adb never returns)
-            Invoke-Remote "cd $Dir && (setsid $Dir/loop.sh > pcsc-rs.log 2>&1 < /dev/null &)" | Out-Null
+            # Detach all standard streams; old Android toolbox does not provide setsid.
+            Invoke-Remote "cd $Dir && ($Dir/loop.sh > pcsc-rs.log 2>&1 < /dev/null &)" | Out-Null
             # Wait until it connects, fails or is refused (the update check is slow on some devices; 20 seconds at most)
             for ($i = 0; $i -lt 20; $i++) {
                 Start-Sleep -Seconds 1

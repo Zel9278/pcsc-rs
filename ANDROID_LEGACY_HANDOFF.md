@@ -36,8 +36,8 @@
 - `MainActivity.java` にパスワード、ホスト名、接続先URI、自動起動、状態/ログ、起動/再起動/停止の画面を実装。
 - `Settings.java` に設定のSharedPreferences保存とシェル値の簡易バリデーションを実装。
 - `BootReceiver.java` に端末再起動時の自動起動を実装。
-- `RootClient.java` でroot経由で実行ファイルを `/data/local/tmp/pcsc-rs` に配置し、shell UID 2000で常駐ループを起動する構成を追加。設定値を `.env` に保存し、クライアント本体が既存のdotenvy処理で読む想定。
-- Gingerbreadでは利用できないShizukuと無線デバッグペアリングは対象外。旧アプリはroot前提。
+- `RootClient.java` でroot端末向けに実行ファイルを `/data/local/tmp/pcsc-rs` に配置し、shell UID 2000で常駐ループを起動する構成を追加。rootを取れないN-06CではAPKを使わず、PC側のadbスクリプトを使う。
+- Gingerbreadでは利用できないShizukuと無線デバッグペアリングは対象外。旧APKはroot前提で、N-06CはPCからadb shellで操作する。
 
 ### Rustクライアント
 
@@ -65,8 +65,8 @@
 
 1. **APKをまだビルドしていない。** この環境では必要なJDK 21 / Android NDKなどを用意できず、Gradleビルドは未確認。API 10端末で実際にインストールできるかも未確認。
 2. **ARMv6/ARMv7のRustクロスビルドは未確認。** とくにrustlsが依存するringのARMv6サポート/アセンブリ選択がリスク。CIで実際に両ターゲットをビルドすること。
-3. **N-06Cでの起動・TLS・通信・DNS・root動作は未確認。** `su -c`、`su 2000` の引数仕様、Superuser承認画面、`pidof` / `tail` / `chown` 等の古いtoolbox実装差も実機で確認すること。
-4. **カーネル互換性リスク。** N-06CのLinux 2.6.35カーネルはmuslがPOSIX準拠を想定する2.6.39以降を下回る。実行できる可能性はあるが、実機検証なしに動作保証しない。
+3. **N-06Cでの起動・TLS・通信・DNS・adb shell動作は未確認。** `adb shell` の常駐化、`pidof` / `tail` 等の古いtoolbox実装差を実機で確認すること。
+4. **カーネル互換性リスク。** N-06CのLinux 2.6.35カーネルはmuslがPOSIX準拠を想定する2.6.39以降を下回る。adb shellで実行できる可能性はあるが、実機検証なしに動作保証しない。
 5. **旧APKの更新。** 旧APKは自動更新を行わない。新しいクライアントは新しいAPKを配布して更新する。
 6. **ARMv6を含む両方のABIが本当にAPKに入ること。** `checkLegacyClients` は両assetsを必須とする。CIのartifact download先と `debug` / `release` の配置を確認する。
 7. **署名・配布。** リリースAPKは既存keystore secretsの設定が必要。PRのdebug署名APKは正式配布用ではない。
@@ -83,7 +83,7 @@
 3. APKをzipとして確認し、ManifestのminSdkが10、両ARM payloadが存在することを検証。
 4. 実機またはAndroid 2.3.3エミュレータでインストール・初回root許可・起動/停止・再起動後起動・接続・TLS・DNSを確認。
 5. ringがARMv6ビルドを拒否する場合は、ARMv6 TLS依存を別方式にするか、機能差を明記してARMv6側の提供仕様を再検討。確認前にARMv6対応済みと断定しない。
-6. `RootClient` のログ/停止処理を古いBusyBox/toolbox環境で確認し、プロセス残留や二重起動がないか見る。
+6. `scripts/android-adb.sh` / `.ps1` のログ/停止処理を古いtoolbox環境で確認し、プロセス残留や二重起動がないか見る。
 
 ## 参照情報
 

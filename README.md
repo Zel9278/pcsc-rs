@@ -161,7 +161,8 @@ curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | s
 - ワイヤレスデバッグは、ペアリングしたあとはアプリが自分でオンにできます（ネットワークごとに初回だけ「このネットワークで常に許可」が要ります）
 - 「スマホの再起動後に自動で開始」: root はそのまま、ワイヤレスデバッグは許可済みの Wi-Fi につながっていれば、Shizuku は Shizuku も起動時に動く（Sui や root）ときだけ効きます
 
-自分でビルドするときは [android/README.md](android/README.md) を見てください。
+自分でビルドするときは [android/README.md](android/README.md) を見てください。Android 2.3
+（API 10）のrootを取れない端末では、下のadb版を使ってください。
 
 #### PC から adb で
 
@@ -183,11 +184,17 @@ $env:PASS = "<PASS>"; & ([scriptblock]::Create((irm https://raw.githubuserconten
 # status / log / stop も同じ形で（install の代わりに書く）
 ```
 
-- 端末から切り離して動くので、ケーブルを抜いても、画面を消して省電力（Doze）に入っても止まりません。落ちたとき・自動更新のあとは 5 秒後に起動し直します
+- 端末から切り離して動くので、ケーブルを抜いても、画面を消して省電力（Doze）に入っても止まりません。落ちたときは 5 秒後に起動し直します
 - 端末を再起動すると止まるので、もう一度 `install` してください（2回目からは `PASS` と名前を引き継ぎます）
 - 名前を指定しないと機種名（例: `SH-M28`）になります
 - adb が PATH に無いときは、`--adb /path/to/adb`（PowerShell 版は `-Adb C:\path\to\adb.exe`）か、環境変数 `ADB` で場所を指定します
 - 端末が何台もつながっているときは、`--serial <シリアル>`（PowerShell 版は `-Serial`）か `ANDROID_SERIAL` で選びます。シリアルは `devices` で一覧が出ます（無線デバッグなら `IP:ポート`）
+- 端末のABIに応じて、64bit Androidは`aarch64-linux-android`、ARMv7は
+  `armv7-unknown-linux-musleabi`、ARMv6は`arm-unknown-linux-musleabi`を自動で選びます。
+- NEC MEDIAS WP N-06Cのようなrootを取れないAndroid 2.3端末も、この手順で動かせます。
+  N-06CではUSBデバッグを有効にして、端末でこのPCのRSA鍵を許可してください。
+- Android 2.3向けクライアントは自動更新を行いません。新しいリリースを使うときは、
+  PCからもう一度`install`してください。
 
 ### Nix
 
