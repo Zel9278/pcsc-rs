@@ -199,6 +199,11 @@ $env:PASS = "<PASS>"; & ([scriptblock]::Create((irm https://raw.githubuserconten
   `scripts/build-android-local.sh android64`を実行できます。ARMv6/ARMv7向けは
   `scripts/build-android-local.sh arm32`を使い、`cross`とDockerが必要です。
   両方のAPKまで作る場合は`./scripts/build-android-local.sh apk`を実行します。
+- WindowsホストからはPowerShell版の
+  `.\scripts\build-android-local.ps1 android64`を使えます。ARMv6/ARMv7向けは
+  `.\scripts\build-android-local.ps1 arm32`、両方のAPKまで作る場合は
+  `.\scripts\build-android-local.ps1 apk`を実行します。PowerShell版のARM32/APKビルドには
+  Docker Desktopが必要です。
 
 ### Nix
 

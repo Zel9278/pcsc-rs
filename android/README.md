@@ -34,6 +34,11 @@ Compose dependencies require Android SDK Platform 37; install it if it is not pr
 The resulting files are `android/app/build/outputs/apk/release/app-release.apk` and
 `android/legacy/build/outputs/apk/release/legacy-release-unsigned.apk`.
 
+On a Windows host, run the PowerShell equivalent from the repository root:
+`.\scripts\build-android-local.ps1 android64`. Use `arm32` for the ARMv6/ARMv7
+builds or `apk` to build both APKs. The PowerShell script uses the Windows NDK
+toolchain directly and requires Docker Desktop for `arm32` and `apk`.
+
 Without the signing variables below the release APK is signed with the debug key.
 
 | Variable | |

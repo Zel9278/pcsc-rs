@@ -18,6 +18,7 @@
 
 - `.github/workflows/build.yml`
 - `scripts/build-android-local.sh`
+- `scripts/build-android-local.ps1`
 - `Cargo.toml`
 - `android/.gitignore`
 - `android/README.md`
@@ -87,6 +88,8 @@
    - WindowsではAndroid Studio付属JDK 21とAndroid SDK Platform 37でAPKをビルドする。
      `android\gradlew.bat --no-daemon --max-workers=2 :app:assembleRelease :legacy:assembleRelease`
      （`android/legacy/src/main/assets`と`android/app/src/main/jniLibs`へ先にバイナリを配置する。）
+   - WindowsホストではPowerShell版も利用できる。
+     `.\scripts\build-android-local.ps1 apk`
 3. WSLのDocker Desktop連携が有効なら、以下の個別コマンドでも確認できる。
    - `cargo build --locked --bins --release --target aarch64-linux-android --no-default-features --features android-legacy`
    - `cross build --locked --bins --release --target arm-unknown-linux-musleabi --no-default-features --features android-legacy`
