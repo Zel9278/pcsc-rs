@@ -34,7 +34,7 @@ jobs:
   # Recover that tag once so the release and its binaries are still published.
   recover-v0-9-2:
     needs: release-please
-    if: ${{ always() && needs.release-please.result == 'success' && needs.release-please.outputs.release_created != 'true' && startsWith(github.event.head_commit.message, 'ci: fix Android release') }}
+    if: "${{ always() && needs.release-please.result == 'success' && needs.release-please.outputs.release_created != 'true' && startsWith(github.event.head_commit.message, 'ci: fix Android release') }}"
     permissions:
       contents: write
     runs-on: ubuntu-latest
