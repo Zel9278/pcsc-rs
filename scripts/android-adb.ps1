@@ -114,14 +114,14 @@ for pidfile in __DIR__/loop.pid __DIR__/client.pid; do
   if test -f $pidfile; then
     pid=$(cat $pidfile 2>/dev/null)
     case $pid in ''|*[!0-9]*) ;; *) kill -9 $pid 2>/dev/null ;; esac
-    rm -f $pidfile
+    rm $pidfile 2>/dev/null || true
   fi
 done
-ps | while read user pid ppid vsize rss wchan pc name; do
+ps | while read user pid ppid vsize rss wchan pc state name; do
   case $name in pcsc-rs|*/pcsc-rs) kill -9 $pid 2>/dev/null ;; esac
 done
 true
-'@ -replace "__DIR__", $Dir) -replace "\s+", " "
+'@ -replace "__DIR__", $Dir)
     Invoke-Remote $stopCommand | Out-Null
 }
 
@@ -184,7 +184,7 @@ while true; do
   client_pid=$!
   echo $client_pid > client.pid
   wait $client_pid
-  rm -f client.pid
+  rm client.pid 2>/dev/null || true
   sleep 5
 done
 '@ "$Dir/loop.sh"
@@ -194,8 +194,8 @@ done
             # Wait until it connects, fails or is refused (the update check is slow on some devices; 20 seconds at most)
             for ($i = 0; $i -lt 20; $i++) {
                 Start-Sleep -Seconds 1
-                $null = Invoke-Adb shell "grep -qE 'Received hi|Connection failed|refused' $Dir/pcsc-rs.log"
-                if ($LASTEXITCODE -eq 0) { break }
+                $log = @(Invoke-Adb shell "cat $Dir/pcsc-rs.log 2>/dev/null") -join "`n"
+                if ($log -match "Received hi|Connection failed|refused") { break }
             }
             Get-RemoteLog 8
     }
@@ -204,7 +204,7 @@ done
         "Stopped"
     }
     "status" {
-        $ps = @(Invoke-Adb shell "ps | grep pcsc-rs | grep -v grep")
+        $ps = @(Invoke-Remote "ps | while read user pid ppid vsize rss wchan pc state name; do case `$name in pcsc-rs|*/pcsc-rs) echo `$user `$pid `$ppid `$vsize `$rss `$wchan `$pc `$state `$name ;; esac; done")
         if ($ps.Count -gt 0) { $ps } else { "Not running" }
     }
     "log" {

@@ -83,7 +83,7 @@ adb() {
 stop_remote() {
   # 古い toolbox には pidof や ps のオプションがないため、PID ファイルと
   # 標準の ps 出力（USER PID ... NAME）だけを使う。
-  adb shell "for pidfile in $DIR/loop.pid $DIR/client.pid; do if test -f \$pidfile; then pid=\$(cat \$pidfile 2>/dev/null); case \$pid in ''|*[!0-9]*) ;; *) kill -9 \$pid 2>/dev/null ;; esac; rm -f \$pidfile; fi; done; ps | while read user pid ppid vsize rss wchan pc name; do case \$name in pcsc-rs|*/pcsc-rs) kill -9 \$pid 2>/dev/null ;; esac; done; true"
+  adb shell "for pidfile in $DIR/loop.pid $DIR/client.pid; do if test -f \$pidfile; then pid=\$(cat \$pidfile 2>/dev/null); case \$pid in ''|*[!0-9]*) ;; *) kill -9 \$pid 2>/dev/null ;; esac; rm \$pidfile 2>/dev/null || true; fi; done; ps | while read user pid ppid vsize rss wchan pc state name; do case \$name in pcsc-rs|*/pcsc-rs) kill -9 \$pid 2>/dev/null ;; esac; done; true"
 }
 
 case "$command" in
@@ -166,7 +166,7 @@ while true; do
   client_pid=$!
   echo $client_pid > client.pid
   wait $client_pid
-  rm -f client.pid
+  rm client.pid 2>/dev/null || true
   sleep 5
 done
 LOOP
@@ -178,7 +178,7 @@ LOOP
     while [ $i -lt 20 ]; do
       sleep 1
       i=$((i + 1))
-      adb shell "grep -qE 'Received hi|Connection failed|refused' $DIR/pcsc-rs.log" && break
+      adb shell "cat $DIR/pcsc-rs.log 2>/dev/null" | grep -qE 'Received hi|Connection failed|refused' && break
     done
     adb shell "tail -n 8 $DIR/pcsc-rs.log"
     ;;
@@ -187,7 +187,7 @@ LOOP
     echo "止めた"
     ;;
   status)
-    adb shell "ps -A -o PID,USER,ETIME,ARGS | grep -E '^ *PID|pcsc-rs' | grep -v grep" || echo "動いていない"
+    adb shell "ps | while read user pid ppid vsize rss wchan pc state name; do case \$name in pcsc-rs|*/pcsc-rs) echo \$user \$pid \$ppid \$vsize \$rss \$wchan \$pc \$state \$name ;; esac; done" || echo "動いていない"
     ;;
   log)
     adb shell "tail -n $lines $DIR/pcsc-rs.log"
