@@ -37,7 +37,8 @@ The resulting files are `android/app/build/outputs/apk/release/app-release.apk` 
 On a Windows host, run the PowerShell equivalent from the repository root:
 `.\scripts\build-android-local.ps1 android64`. Use `arm32` for the ARMv6/ARMv7
 builds or `apk` to build both APKs. The PowerShell script uses the Windows NDK
-toolchain directly and requires Docker Desktop for `arm32` and `apk`.
+toolchain directly for ARM64 and delegates ARMv6/ARMv7 builds to WSL. The latter
+requires Rust, `cross`, and Docker Desktop WSL integration in the selected WSL distribution.
 
 Without the signing variables below the release APK is signed with the debug key.
 

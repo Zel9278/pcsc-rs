@@ -11,7 +11,8 @@ param(
     [Parameter(Position = 0)]
     [ValidateSet("android64", "arm32", "all", "apk")]
     [string]$BuildKind = "android64",
-    [int]$CompileSdk = 0
+    [int]$CompileSdk = 0,
+    [string]$WslDistribution = "Ubuntu"
 )
 
 $ErrorActionPreference = "Stop"
@@ -34,7 +35,7 @@ function Get-NdkRoot {
     $explicitRoots = @($env:ANDROID_NDK_ROOT, $env:ANDROID_NDK_HOME) |
         Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Container) }
     if ($explicitRoots.Count -gt 0) {
-        return $explicitRoots[0]
+        return [string]($explicitRoots | Select-Object -First 1)
     }
 
     $sdkRoots = @($env:ANDROID_SDK_ROOT, $env:ANDROID_HOME) |
@@ -45,7 +46,7 @@ function Get-NdkRoot {
             $latest = Get-ChildItem -LiteralPath $ndkDirectory -Directory |
                 Sort-Object Name | Select-Object -Last 1
             if ($latest) {
-                return $latest.FullName
+                return [string]$latest.FullName
             }
         }
     }
@@ -59,12 +60,12 @@ function Add-AndroidTarget {
 }
 
 function Build-Android64 {
-    $ndkRoot = Get-NdkRoot
+    $ndkRoot = [string](Get-NdkRoot)
     if (-not $ndkRoot) {
         throw "Android NDK was not found. Set ANDROID_NDK_ROOT or ANDROID_SDK_ROOT and install an NDK."
     }
 
-    $ndkBin = Join-Path $ndkRoot "toolchains\llvm\prebuilt\windows-x86_64\bin"
+    $ndkBin = Join-Path -Path $ndkRoot.Trim() -ChildPath "toolchains\llvm\prebuilt\windows-x86_64\bin"
     if (-not (Test-Path -LiteralPath $ndkBin -PathType Container)) {
         throw "Windows NDK toolchain was not found: $ndkBin"
     }
@@ -93,21 +94,15 @@ function Build-Android64 {
 }
 
 function Build-Arm32 {
-    Require-Command "cross" "Install cross with: cargo install cross --locked"
-    Require-Command "docker" "Install Docker Desktop and make docker.exe available on PATH."
-    Invoke-External "docker" @("info")
-
-    Push-Location $RepoRoot
-    try {
-        foreach ($target in @("arm-unknown-linux-musleabi", "armv7-unknown-linux-musleabi")) {
-            Invoke-External "cross" @(
-                "build", "--locked", "--release", "--target", $target,
-                "--no-default-features", "--features", "android-legacy"
-            )
-        }
-    } finally {
-        Pop-Location
+    Require-Command "wsl.exe" "Install WSL and a Linux distribution with Rust, cross, and Docker Desktop WSL integration."
+    $wslInput = $RepoRoot -replace "\\", "/"
+    $wslRoot = ((& wsl.exe -d $WslDistribution -- wslpath -a $wslInput 2>$null) -join "").Trim()
+    if ($LASTEXITCODE -ne 0 -or -not $wslRoot) {
+        throw "Could not resolve the repository path in WSL distribution '$WslDistribution'."
     }
+
+    $wslCommand = "cd '$wslRoot' && bash scripts/build-android-local.sh arm32"
+    Invoke-External "wsl.exe" @("-d", $WslDistribution, "--", "bash", "-lc", $wslCommand)
 }
 
 function Prepare-ApkAssets {
