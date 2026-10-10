@@ -111,7 +111,7 @@ pub struct Identity {
 }
 
 /// Version shown for this client in PC Status.
-const CLIENT_VERSION: &str = "mimizk-rs v0.9.2";
+const CLIENT_VERSION: &str = concat!("mimizk-rs v", env!("CARGO_PKG_VERSION"));
 
 impl SystemStatus {
     pub fn collect(sampler: &Sampler, identity: &Identity) -> Self {

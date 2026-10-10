@@ -81,8 +81,9 @@ adb() {
 }
 
 stop_remote() {
-  # ループ（PID はループ自身が loop.pid に書く）を先に止めてから、本体を止める
-  adb shell "test -f $DIR/loop.pid && kill \$(cat $DIR/loop.pid) 2>/dev/null; rm -f $DIR/loop.pid; kill \$(pidof pcsc-rs) 2>/dev/null; true"
+  # 古い toolbox には pidof や ps のオプションがないため、PID ファイルと
+  # 標準の ps 出力（USER PID ... NAME）だけを使う。
+  adb shell "for pidfile in $DIR/loop.pid $DIR/client.pid; do if test -f \$pidfile; then pid=\$(cat \$pidfile 2>/dev/null); case \$pid in ''|*[!0-9]*) ;; *) kill -9 \$pid 2>/dev/null ;; esac; rm -f \$pidfile; fi; done; ps | while read user pid ppid vsize rss wchan pc name; do case \$name in pcsc-rs|*/pcsc-rs) kill -9 \$pid 2>/dev/null ;; esac; done; true"
 }
 
 case "$command" in
@@ -161,7 +162,11 @@ echo $$ > loop.pid
 # adb shell は HOSTNAME に機種のコード名を入れてくる。.env の名前（無ければ機種名）を使わせる
 unset HOSTNAME
 while true; do
-  ./pcsc-rs
+  ./pcsc-rs &
+  client_pid=$!
+  echo $client_pid > client.pid
+  wait $client_pid
+  rm -f client.pid
   sleep 5
 done
 LOOP

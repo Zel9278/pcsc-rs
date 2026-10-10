@@ -107,8 +107,22 @@ function Resolve-LocalBinary([string]$Path, [string]$Target) {
 }
 
 function Stop-Remote {
-    # Stop the loop first (it writes its own PID to loop.pid), then any client process.
-    Invoke-Remote "test -f $Dir/loop.pid && kill `$(cat $Dir/loop.pid) 2>/dev/null; rm -f $Dir/loop.pid; set -- `$(ps | grep pcsc-rs | grep -v grep); while [ `$# -ge 2 ]; do kill `$2 2>/dev/null; shift 9; done; true" | Out-Null
+    # Older toolbox ps does not support pidof or ps options. The loop records both
+    # PIDs, and the ps fallback reads the stable USER PID ... NAME layout.
+    $stopCommand = (@'
+for pidfile in __DIR__/loop.pid __DIR__/client.pid; do
+  if test -f $pidfile; then
+    pid=$(cat $pidfile 2>/dev/null)
+    case $pid in ''|*[!0-9]*) ;; *) kill -9 $pid 2>/dev/null ;; esac
+    rm -f $pidfile
+  fi
+done
+ps | while read user pid ppid vsize rss wchan pc name; do
+  case $name in pcsc-rs|*/pcsc-rs) kill -9 $pid 2>/dev/null ;; esac
+done
+true
+'@ -replace "__DIR__", $Dir) -replace "\s+", " "
+    Invoke-Remote $stopCommand | Out-Null
 }
 
 function Get-RemoteLog([int]$Count) {
@@ -166,7 +180,11 @@ echo $$ > loop.pid
 # adb shell sets HOSTNAME to the device codename; use the name in .env instead
 unset HOSTNAME
 while true; do
-  ./pcsc-rs
+  ./pcsc-rs &
+  client_pid=$!
+  echo $client_pid > client.pid
+  wait $client_pid
+  rm -f client.pid
   sleep 5
 done
 '@ "$Dir/loop.sh"
