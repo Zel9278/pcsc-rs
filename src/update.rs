@@ -108,10 +108,10 @@ fn update() -> Result<Option<(std::path::PathBuf, String)>, Box<dyn std::error::
         .then(|| (bin, status.version().to_owned())))
 }
 
-/// Release assets are `pcsc-rs-v<version>-<target>` (`.exe` on Windows).
+/// Release assets are `mimizk-rs-v<version>-<target>` (`.exe` on Windows).
 fn is_asset_for(name: &str, target: &str) -> bool {
     let name = name.strip_suffix(".exe").unwrap_or(name);
-    name.starts_with("pcsc-rs-v") && name.ends_with(&format!("-{target}"))
+    name.starts_with("mimizk-rs-v") && name.ends_with(&format!("-{target}"))
 }
 
 fn restart(bin: &Path) -> ! {
@@ -131,21 +131,24 @@ mod tests {
         let musl = "aarch64-unknown-linux-musl";
         let android = "aarch64-linux-android";
         assert!(is_asset_for(
-            "pcsc-rs-v2.6.0-aarch64-unknown-linux-musl",
+            "mimizk-rs-v0.9.2-aarch64-unknown-linux-musl",
             musl
         ));
-        assert!(!is_asset_for("pcsc-rs-v2.6.0-aarch64-linux-android", musl));
+        assert!(!is_asset_for(
+            "mimizk-rs-v0.9.2-aarch64-linux-android",
+            musl
+        ));
         assert!(is_asset_for(
-            "pcsc-rs-v2.6.0-aarch64-linux-android",
+            "mimizk-rs-v0.9.2-aarch64-linux-android",
             android
         ));
         assert!(!is_asset_for(
-            "pcsc-rs-v2.6.0-aarch64-unknown-linux-musl",
+            "mimizk-rs-v0.9.2-aarch64-unknown-linux-musl",
             android
         ));
-        assert!(!is_asset_for("pcsc-rs-v2.6.0-android.apk", android));
+        assert!(!is_asset_for("mimizk-rs-v0.9.2-android.apk", android));
         assert!(is_asset_for(
-            "pcsc-rs-v2.6.0-x86_64-pc-windows-msvc.exe",
+            "mimizk-rs-v0.9.2-x86_64-pc-windows-msvc.exe",
             "x86_64-pc-windows-msvc"
         ));
     }

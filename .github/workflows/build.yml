@@ -122,11 +122,11 @@ jobs:
         working-directory: target/${{ matrix.platform.target }}/release/
         run: |
           if [ -e pcsc-rs.exe ]; then
-            filename="pcsc-rs-${{ inputs.tag-name }}-${{ matrix.platform.target }}.exe"
+            filename="mimizk-rs-${{ inputs.tag-name }}-${{ matrix.platform.target }}.exe"
             mv pcsc-rs.exe "$filename"
             gh release upload ${{ inputs.tag-name }} "$filename"#${{ matrix.platform.target }} --clobber
           else
-            filename="pcsc-rs-${{ inputs.tag-name }}-${{ matrix.platform.target }}"
+            filename="mimizk-rs-${{ inputs.tag-name }}-${{ matrix.platform.target }}"
             mv pcsc-rs "$filename"
             gh release upload ${{ inputs.tag-name }} "$filename"#${{ matrix.platform.target }} --clobber
           fi
@@ -205,9 +205,9 @@ jobs:
         if: ${{ inputs.tag-name && env.PROFILE == 'release' }}
         run: |
           test -n "$ANDROID_KEYSTORE"  # a release APK must not be signed with a debug key
-          filename="pcsc-rs-${{ inputs.tag-name }}-android.apk"
+          filename="mimizk-rs-${{ inputs.tag-name }}-android.apk"
           mv android/app/build/outputs/apk/release/app-release.apk "$filename"
           gh release upload ${{ inputs.tag-name }} "$filename"#android-app --clobber
-          legacy="pcsc-rs-${{ inputs.tag-name }}-android-legacy.apk"
+          legacy="mimizk-rs-${{ inputs.tag-name }}-android-legacy.apk"
           mv android/legacy/build/outputs/apk/release/legacy-release.apk "$legacy"
           gh release upload ${{ inputs.tag-name }} "$legacy"#android-legacy-app --clobber

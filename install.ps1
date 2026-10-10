@@ -86,8 +86,8 @@ if ($Hostname) { $keep["HOSTNAME"] = $Hostname }
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 $tag = (Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -UseBasicParsing).tag_name
 if (-not $tag) { throw "Could not get the latest release" }
-$download = Join-Path ([IO.Path]::GetTempPath()) "pcsc-rs-$tag-$Target.exe"
-Invoke-WebRequest -Uri "https://github.com/$Repo/releases/download/$tag/pcsc-rs-$tag-$Target.exe" -OutFile $download -UseBasicParsing
+$download = Join-Path ([IO.Path]::GetTempPath()) "mimizk-rs-$tag-$Target.exe"
+Invoke-WebRequest -Uri "https://github.com/$Repo/releases/download/$tag/mimizk-rs-$tag-$Target.exe" -OutFile $download -UseBasicParsing
 Unblock-File -LiteralPath $download
 
 try {

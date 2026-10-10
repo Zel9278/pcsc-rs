@@ -55,7 +55,7 @@
 - `.github/workflows/build.yml` にAPI 21の `aarch64-linux-android`、`arm-unknown-linux-musleabi`、`armv7-unknown-linux-musleabi` のビルド行列を追加。
 - 対象は `cross` を使ってビルドする設定。
 - Android APK jobで両クライアントをassetsへ配置し、現行 `:app` と旧 `:legacy` のAPKをビルド・成果物化する設定。
-- リリース時は通常Android APKに加え `pcsc-rs-<tag>-android-legacy.apk` も添付する。
+- リリース時は通常Android APKに加え `mimizk-rs-<tag>-android-legacy.apk` も添付する。
 - `android/README.md` とルートの `README.md` に、N-06Cなどrootなし端末ではPCからadbを使う説明を追記。
 
 ## 実施した確認

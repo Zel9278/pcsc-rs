@@ -175,7 +175,7 @@ curl -fsSL https://raw.githubusercontent.com/SHINTRANET-Lab/pcsc-rs/main/install
 
 #### アプリ（ワイヤレスデバッグ・Shizuku・root）
 
-[Releases](https://github.com/SHINTRANET-Lab/pcsc-rs/releases/latest) の `pcsc-rs-<バージョン>-android.apk`（arm64）を入れて開き、動かし方を選んで、PASS を入れて「開始」を押します。動かし方は次の3つから選べます。
+[Releases](https://github.com/SHINTRANET-Lab/pcsc-rs/releases/latest) の `mimizk-rs-<バージョン>-android.apk`（arm64）を入れて開き、動かし方を選んで、PASS を入れて「開始」を押します。動かし方は次の3つから選べます。
 
 | 動かし方 | 要るもの | 向いている場合 |
 |---|---|---|

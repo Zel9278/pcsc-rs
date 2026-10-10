@@ -10,7 +10,7 @@ let
   cargoToml = lib.importTOML ../Cargo.toml;
 in
 rustPlatform.buildRustPackage {
-  pname = "pcsc-rs";
+  pname = "mimizk-rs";
   inherit (cargoToml.package) version;
 
   src = lib.fileset.toSource {

@@ -116,7 +116,7 @@ case "$command" in
       if [ -t 2 ]; then progress=--progress-bar; else progress=-sS; fi
       for target in $targets; do
         # 次の候補に進むのはファイルが無いとき（404）だけ。通信の失敗で musl 版に切り替わらないように
-        code=$(curl -L "$progress" -o "$tmp/pcsc-rs" -w '%{http_code}' "https://github.com/SHINTRANET-Lab/pcsc-rs/releases/download/$tag/pcsc-rs-$tag-$target") || {
+        code=$(curl -L "$progress" -o "$tmp/pcsc-rs" -w '%{http_code}' "https://github.com/SHINTRANET-Lab/pcsc-rs/releases/download/$tag/mimizk-rs-$tag-$target") || {
           echo "ダウンロードに失敗した（$target）" >&2
           exit 1
         }

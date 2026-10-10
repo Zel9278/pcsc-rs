@@ -91,7 +91,7 @@ tmp=$(mktemp -d)
 trap 'rm -f "$tmp/pcsc-rs"; rmdir "$tmp"' EXIT
 # 進捗バーは端末で実行したときだけ
 if [ -t 2 ]; then progress=--progress-bar; else progress=-sS; fi
-curl -fL "$progress" -o "$tmp/pcsc-rs" "https://github.com/SHINTRANET-Lab/pcsc-rs/releases/download/$tag/pcsc-rs-$tag-$target"
+curl -fL "$progress" -o "$tmp/pcsc-rs" "https://github.com/SHINTRANET-Lab/pcsc-rs/releases/download/$tag/mimizk-rs-$tag-$target"
 # 動いている古いファイルは書き換えず、置き換える（macOS では上書きするとコード署名の確認で落ちる）。
 # 置き先で作り直すので、SELinux のラベルも置き先のものになる
 mkdir -p "$(dirname "$bin")"
