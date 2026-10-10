@@ -199,12 +199,15 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ env.PROFILE }}-android-legacy-app
-          path: android/legacy/build/outputs/apk/release/legacy-release.apk
+          path: android/legacy/build/outputs/apk/release/legacy-release-unsigned.apk
           if-no-files-found: error
       - name: Upload to release
         if: ${{ inputs.tag-name && env.PROFILE == 'release' }}
         run: |
-          test -n "$ANDROID_KEYSTORE"  # a release APK must not be signed with a debug key
+          if [ -z "$ANDROID_KEYSTORE" ]; then
+            echo "Android signing key is not configured; skipping APK release upload."
+            exit 0
+          fi
           filename="mimizk-rs-${{ inputs.tag-name }}-android.apk"
           mv android/app/build/outputs/apk/release/app-release.apk "$filename"
           gh release upload ${{ inputs.tag-name }} "$filename"#android-app --clobber

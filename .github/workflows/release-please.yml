@@ -34,7 +34,7 @@ jobs:
   # Recover that tag once so the release and its binaries are still published.
   recover-v0-9-2:
     needs: release-please
-    if: ${{ always() && needs.release-please.result == 'success' && needs.release-please.outputs.release_created != 'true' }}
+    if: ${{ always() && needs.release-please.result == 'success' && needs.release-please.outputs.release_created != 'true' && startsWith(github.event.head_commit.message, 'ci: fix Android release') }}
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -50,7 +50,13 @@ jobs:
           TAG_NAME: v0.9.2
         run: |
           if gh release view "$TAG_NAME" >/dev/null 2>&1; then
-            echo "release_created=false" >> "$GITHUB_OUTPUT"
+            assets=$(gh release view "$TAG_NAME" --json assets --jq '.assets[].name')
+            if printf '%s\n' "$assets" | grep -Fxq "mimizk-rs-$TAG_NAME-android.apk" &&
+              printf '%s\n' "$assets" | grep -Fxq "mimizk-rs-$TAG_NAME-android-legacy.apk"; then
+              echo "release_created=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "release_created=true" >> "$GITHUB_OUTPUT"
+            fi
             echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
           elif git ls-remote --exit-code --tags "https://github.com/$GH_REPO.git" "refs/tags/$TAG_NAME" >/dev/null 2>&1; then
             gh release create "$TAG_NAME" --title "mimizk-rs v0.9.2" --generate-notes
