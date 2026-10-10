@@ -17,4 +17,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "pcsc-rs"
-include(":app")
+include(":app", ":legacy")

@@ -43,6 +43,13 @@ xp = [
     "self_update/ureq",
     "self_update/rustls",
 ]
+# Gingerbread APK: a static musl client avoids the Android NDK API 19 baseline.
+android-legacy = [
+    "dep:rustls",
+    "tungstenite/rustls-tls-webpki-roots",
+    "self_update/ureq",
+    "self_update/rustls",
+]
 
 [build-dependencies]
 git2 = { version = "=0.21.0", default-features = false }

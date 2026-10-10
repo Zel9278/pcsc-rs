@@ -37,6 +37,14 @@ jobs:
           # static musl binary cannot use
           - target: aarch64-linux-android
             os: ubuntu-24.04
+          # Static ARM binaries for the separate Android 2.3+ APK. arm uses the ARMv6 ISA;
+          # armv7 has a faster build for the N-06C and other ARMv7 devices.
+          - target: arm-unknown-linux-musleabi
+            os: ubuntu-24.04
+            features: android-legacy
+          - target: armv7-unknown-linux-musleabi
+            os: ubuntu-24.04
+            features: android-legacy
     runs-on: ${{ matrix.platform.os }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -46,7 +54,7 @@ jobs:
         shell: bash -xe {0}
     steps:
       - name: Install musl tools
-        if: ${{ endsWith(matrix.platform.target, '-unknown-linux-musl') }}
+        if: ${{ endsWith(matrix.platform.target, '-unknown-linux-musl') && matrix.platform.features != 'android-legacy' }}
         run: |
           sudo apt-get install -y musl-tools --no-install-recommends
       - name: Use the Android NDK
@@ -82,12 +90,23 @@ jobs:
         with:
           filter: tree:0
           fetch-depth: 0
+      - name: Install Cross
+        if: ${{ matrix.platform.features == 'android-legacy' }}
+        run: cargo install cross --locked --version 0.2.5
       - run: |
           rustup target add ${{ matrix.platform.target }}
       - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
         with:
           key: ${{ matrix.profile }}-${{ matrix.platform.target }}
-      - run: cargo build --locked --bins ${{ matrix.profile == 'release' && '--release' || '' }} --target ${{ matrix.platform.target }} ${{ matrix.platform.features && format('--no-default-features --features {0}', matrix.platform.features) || '' }}
+      - name: Build binary
+        run: |
+          if [[ '${{ matrix.platform.features }}' == android-legacy ]]; then
+            cross build --locked --bins ${{ matrix.profile == 'release' && '--release' || '' }} \
+              --target ${{ matrix.platform.target }} --no-default-features --features android-legacy
+          else
+            cargo build --locked --bins ${{ matrix.profile == 'release' && '--release' || '' }} \
+              --target ${{ matrix.platform.target }} ${{ matrix.platform.features && format('--no-default-features --features {0}', matrix.platform.features) || '' }}
+          fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ matrix.profile }}-${{ matrix.platform.target }}
@@ -111,7 +130,7 @@ jobs:
             gh release upload ${{ inputs.tag-name }} "$filename"#${{ matrix.platform.target }} --clobber
           fi
 
-  # The Android app (android/): the aarch64-linux-android client inside an APK, run with root or Shizuku
+  # The current Android app and the API 10 legacy app.
   android-app:
     needs: build
     permissions:
@@ -130,11 +149,22 @@ jobs:
         with:
           name: ${{ env.PROFILE }}-aarch64-linux-android
           path: client
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ env.PROFILE }}-arm-unknown-linux-musleabi
+          path: client-armv6
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ env.PROFILE }}-armv7-unknown-linux-musleabi
+          path: client-armv7
       - name: Put the client in the APK
         run: |
           profile=$([ "$PROFILE" = release ] && echo release || echo debug)
           mkdir -p android/app/src/main/jniLibs/arm64-v8a
           cp "client/$profile/pcsc-rs" android/app/src/main/jniLibs/arm64-v8a/libpcsc.so
+          mkdir -p android/legacy/src/main/assets/bin/armeabi android/legacy/src/main/assets/bin/armeabi-v7a
+          cp "client-armv6/$profile/pcsc-rs" android/legacy/src/main/assets/bin/armeabi/pcsc-rs
+          cp "client-armv7/$profile/pcsc-rs" android/legacy/src/main/assets/bin/armeabi-v7a/pcsc-rs
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
@@ -159,11 +189,16 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.ANDROID_KEYSTORE_PASSWORD || '' }}
           ANDROID_KEY_ALIAS: ${{ github.event_name != 'pull_request' && secrets.ANDROID_KEY_ALIAS || '' }}
           ANDROID_KEY_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.ANDROID_KEY_PASSWORD || '' }}
-        run: ./gradlew --no-daemon assembleRelease
+        run: ./gradlew --no-daemon :app:assembleRelease :legacy:assembleRelease
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ env.PROFILE }}-android-app
           path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ env.PROFILE }}-android-legacy-app
+          path: android/legacy/build/outputs/apk/release/legacy-release.apk
           if-no-files-found: error
       - name: Upload to release
         if: ${{ inputs.tag-name && env.PROFILE == 'release' }}
@@ -172,3 +207,6 @@ jobs:
           filename="pcsc-rs-${{ inputs.tag-name }}-android.apk"
           mv android/app/build/outputs/apk/release/app-release.apk "$filename"
           gh release upload ${{ inputs.tag-name }} "$filename"#android-app --clobber
+          legacy="pcsc-rs-${{ inputs.tag-name }}-android-legacy.apk"
+          mv android/legacy/build/outputs/apk/release/legacy-release.apk "$legacy"
+          gh release upload ${{ inputs.tag-name }} "$legacy"#android-legacy-app --clobber

@@ -25,6 +25,8 @@ mod cmd;
 mod config;
 mod gpu;
 mod io;
+#[cfg(all(target_os = "linux", target_arch = "arm", target_env = "musl"))]
+mod legacy_dns;
 mod monitor;
 mod status;
 mod thermal;
@@ -32,17 +34,23 @@ mod update;
 
 pub use config::Config;
 
-// With both, tungstenite and self_update pick native-tls, which fails on XP
-#[cfg(all(feature = "native-tls", feature = "xp"))]
+// Rustls replaces native-tls for both targets that cannot use the system OpenSSL.
+#[cfg(all(
+    feature = "native-tls",
+    any(feature = "xp", feature = "android-legacy")
+))]
 compile_error!(
-    "the xp feature replaces native-tls: build with --no-default-features --features xp"
+    "xp and android-legacy replace native-tls: build with --no-default-features and one target feature"
 );
 
 /// Checks for an update, starts the system monitor, keeps a connection to the
 /// PC Status server, and never returns.
 pub fn start(config: &Config) -> ! {
     // Before update::check, whose HTTP client starts threads
-    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[cfg(all(
+        any(target_os = "linux", target_os = "android"),
+        feature = "native-tls"
+    ))]
     android::prepare_tls();
 
     update::check(config.on_update);

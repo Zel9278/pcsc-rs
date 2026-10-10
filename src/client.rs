@@ -200,9 +200,20 @@ fn connect(uri: &str) -> tungstenite::Result<Socket> {
         .port_u16()
         .unwrap_or(if tls { 443 } else { 80 });
 
+    let mut addresses = (host.as_str(), port)
+        .to_socket_addrs()
+        .map(|iter| iter.collect::<Vec<_>>());
+    #[cfg(all(target_os = "linux", target_arch = "arm", target_env = "musl"))]
+    if addresses.as_ref().map_or(true, Vec::is_empty) {
+        if let Ok(found) = crate::legacy_dns::lookup(&host, port) {
+            if !found.is_empty() {
+                addresses = Ok(found);
+            }
+        }
+    }
     let mut last_error = None;
     let mut connected = None;
-    for addr in (host.as_str(), port).to_socket_addrs()? {
+    for addr in addresses? {
         match TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT) {
             Ok(stream) => {
                 connected = Some(stream);
@@ -235,7 +246,7 @@ fn connect(uri: &str) -> tungstenite::Result<Socket> {
         };
         tungstenite::client(request, stream)
     };
-    // rustls (the xp build): the TLS handshake happens during the upgrade, under the same timeouts
+    // Rustls targets: the TLS handshake happens during the upgrade, under the same timeouts.
     #[cfg(not(feature = "native-tls"))]
     let handshake = tungstenite::client_tls_with_config(request, stream, None, None);
     match handshake {
@@ -250,7 +261,7 @@ fn set_read_timeout(socket: &Socket) -> std::io::Result<()> {
         MaybeTlsStream::Plain(stream) => stream,
         #[cfg(feature = "native-tls")]
         MaybeTlsStream::NativeTls(stream) => stream.get_ref(),
-        #[cfg(feature = "xp")]
+        #[cfg(any(feature = "xp", feature = "android-legacy"))]
         MaybeTlsStream::Rustls(stream) => stream.get_ref(),
         _ => return Ok(()),
     };
