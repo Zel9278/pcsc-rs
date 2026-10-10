@@ -30,6 +30,7 @@ mod legacy_dns;
 mod monitor;
 mod status;
 mod thermal;
+#[cfg(not(feature = "android-legacy"))]
 mod update;
 
 pub use config::Config;
@@ -43,18 +44,21 @@ compile_error!(
     "xp and android-legacy replace native-tls: build with --no-default-features and one target feature"
 );
 
-/// Checks for an update, starts the system monitor, keeps a connection to the
-/// PC Status server, and never returns.
+/// Starts the system monitor, keeps a connection to the PC Status server, and
+/// never returns.
 pub fn start(config: &Config) -> ! {
-    // Before update::check, whose HTTP client starts threads
+    // Before the updater starts, whose HTTP client starts threads.
     #[cfg(all(
         any(target_os = "linux", target_os = "android"),
         feature = "native-tls"
     ))]
     android::prepare_tls();
 
-    update::check(config.on_update);
-    update::spawn_periodic(config.on_update);
+    #[cfg(not(feature = "android-legacy"))]
+    {
+        update::check(config.on_update);
+        update::spawn_periodic(config.on_update);
+    }
 
     let hostname = config.hostname.clone();
     #[cfg(any(target_os = "linux", target_os = "android"))]

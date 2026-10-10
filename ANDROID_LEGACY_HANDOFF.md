@@ -41,7 +41,7 @@
 
 ### Rustクライアント
 
-- `Cargo.toml` に `android-legacy` featureを追加。TLSはrustls + bundled webpki roots、更新HTTPはureqを選ぶ。
+- `Cargo.toml` に `android-legacy` featureを追加。TLSはrustls + bundled webpki rootsを使い、旧APKでは自動更新を無効化する。
 - `src/client.rs` にARM Linux musl向けDNSフォールバックを追加。
 - `src/legacy_dns.rs` を新規作成。`/system/bin/getprop net.dns1/net.dns2` からIPv4 DNSサーバーを取り、Aレコード照会を行う。
 - `src/lib.rs` で当該feature時はAndroid TLS証明書ディレクトリ設定を実行しないよう条件を調整。
@@ -67,7 +67,7 @@
 2. **ARMv6/ARMv7のRustクロスビルドは未確認。** とくにrustlsが依存するringのARMv6サポート/アセンブリ選択がリスク。CIで実際に両ターゲットをビルドすること。
 3. **N-06Cでの起動・TLS・通信・DNS・root動作は未確認。** `su -c`、`su 2000` の引数仕様、Superuser承認画面、`pidof` / `tail` / `chown` 等の古いtoolbox実装差も実機で確認すること。
 4. **カーネル互換性リスク。** N-06CのLinux 2.6.35カーネルはmuslがPOSIX準拠を想定する2.6.39以降を下回る。実行できる可能性はあるが、実機検証なしに動作保証しない。
-5. **更新時のDNS。** WebSocket接続には追加DNS処理があるが、自己更新HTTP(ureq)側は標準resolverを使う。Android musl環境でDNS解決できない場合、更新機能は失敗する可能性がある。更新機能を保持するなら対応を検討する。
+5. **旧APKの更新。** 旧APKは自動更新を行わない。新しいクライアントは新しいAPKを配布して更新する。
 6. **ARMv6を含む両方のABIが本当にAPKに入ること。** `checkLegacyClients` は両assetsを必須とする。CIのartifact download先と `debug` / `release` の配置を確認する。
 7. **署名・配布。** リリースAPKは既存keystore secretsの設定が必要。PRのdebug署名APKは正式配布用ではない。
 8. **GitHub Actions YAMLの実行確認がない。** workflow expressions、`cross` の実行環境、artifactディレクトリの実体、Android Gradle Plugin 9.4.1でAPI 10向けAPKを生成できるか確認する。

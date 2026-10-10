@@ -68,7 +68,6 @@ final class RootClient {
             int version = context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionCode;
             StringBuilder envFile = new StringBuilder();
             envFile.append("PASS='").append(settings.pass).append("'\n");
-            envFile.append("PCSC_UPDATED=terminate\n");
             if (settings.hostname.trim().length() != 0) {
                 envFile.append("HOSTNAME='").append(settings.hostname.trim()).append("'\n");
             }

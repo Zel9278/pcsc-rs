@@ -45,3 +45,4 @@ on Gingerbread. The N-06C uses the ARMv7 APK payload.
 
 The legacy client is built with the `android-legacy` Rust feature and musl targets. The APK
 installer extracts the matching client from its assets and copies it to `/data/local/tmp/pcsc-rs`.
+The legacy client does not perform self-updates; replace the APK to install a newer client.
