@@ -107,8 +107,16 @@ function Resolve-LocalBinary([string]$Path, [string]$Target) {
 }
 
 function Stop-Remote {
-    # Stop the loop first (it writes its own PID to loop.pid), then the client
-    Invoke-Remote "test -f $Dir/loop.pid && kill `$(cat $Dir/loop.pid) 2>/dev/null; rm -f $Dir/loop.pid; kill `$(pidof pcsc-rs) 2>/dev/null; true" | Out-Null
+    # Stop the loop first (it writes its own PID to loop.pid), then any client process.
+    Invoke-Remote "test -f $Dir/loop.pid && kill `$(cat $Dir/loop.pid) 2>/dev/null; rm -f $Dir/loop.pid; set -- `$(ps | grep pcsc-rs | grep -v grep); while [ `$# -ge 2 ]; do kill `$2 2>/dev/null; shift 9; done; true" | Out-Null
+}
+
+function Get-RemoteLog([int]$Count) {
+    # Android 2.3 toolbox may not provide tail; fetch the file and trim it locally.
+    $output = @(Invoke-Adb shell "cat $Dir/pcsc-rs.log 2>/dev/null") |
+        ForEach-Object { "$_".TrimEnd("`r") }
+    if ($LASTEXITCODE -ne 0) { throw "adb shell failed: cat $Dir/pcsc-rs.log" }
+    if ($Count -gt 0) { $output | Select-Object -Last $Count } else { $output }
 }
 
 switch ($Command) {
@@ -153,9 +161,9 @@ switch ($Command) {
             # Restart the client 5 seconds after it exits (crash). .env is read from the working directory.
             Send-File @'
 #!/system/bin/sh
-cd "$(dirname "$0")" || exit 1
+cd /data/local/tmp/pcsc-rs || exit 1
 echo $$ > loop.pid
-# adb shell sets HOSTNAME to the device codename; use the name in .env (or the model) instead
+# adb shell sets HOSTNAME to the device codename; use the name in .env instead
 unset HOSTNAME
 while true; do
   ./pcsc-rs
@@ -171,17 +179,17 @@ done
                 $null = Invoke-Adb shell "grep -qE 'Received hi|Connection failed|refused' $Dir/pcsc-rs.log"
                 if ($LASTEXITCODE -eq 0) { break }
             }
-            Invoke-Remote "tail -n 8 $Dir/pcsc-rs.log"
+            Get-RemoteLog 8
     }
     "stop" {
         Stop-Remote
         "Stopped"
     }
     "status" {
-        $ps = @(Invoke-Adb shell "ps -A -o PID,USER,ETIME,ARGS | grep -E '^ *PID|pcsc-rs' | grep -v grep")
-        if ($ps.Count -gt 1) { $ps } else { "Not running" }
+        $ps = @(Invoke-Adb shell "ps | grep pcsc-rs | grep -v grep")
+        if ($ps.Count -gt 0) { $ps } else { "Not running" }
     }
     "log" {
-        Invoke-Remote "tail -n $Lines $Dir/pcsc-rs.log"
+        Get-RemoteLog $Lines
     }
 }
