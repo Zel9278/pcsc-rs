@@ -3,7 +3,7 @@
 ## 目的と依頼内容
 
 - 現行Androidアプリを古い端末でも使えるようにする。
-- 最低対応OSは Android 2.3.3（API 10）。
+- 対応OSは Android 2.3.3（API 10）〜Android 6.x（API 23）。
 - 配布形式はできれば APK。
 - 既存機能は可能な限り維持する。
 - ARMv6 / ARMv7 の両方を用意する。
@@ -48,11 +48,11 @@
 
 ### CI / 配布
 
-- `.github/workflows/build.yml` に `arm-unknown-linux-musleabi` と `armv7-unknown-linux-musleabi` のビルド行列を追加。
+- `.github/workflows/build.yml` にAPI 21の `aarch64-linux-android`、`arm-unknown-linux-musleabi`、`armv7-unknown-linux-musleabi` のビルド行列を追加。
 - 対象は `cross` を使ってビルドする設定。
 - Android APK jobで両クライアントをassetsへ配置し、現行 `:app` と旧 `:legacy` のAPKをビルド・成果物化する設定。
 - リリース時は通常Android APKに加え `pcsc-rs-<tag>-android-legacy.apk` も添付する。
-- `android/README.md` に旧APKの説明を追記。
+- `android/README.md` とルートの `README.md` に、N-06Cなどrootなし端末ではPCからadbを使う説明を追記。
 
 ## 実施した確認
 
@@ -63,10 +63,10 @@
 
 ## 未実施・未確認のこと（重要）
 
-1. **APKをまだビルドしていない。** この環境では必要なJDK 21 / Android NDKなどを用意できず、Gradleビルドは未確認。API 10端末で実際にインストールできるかも未確認。
-2. **ARMv6/ARMv7のRustクロスビルドは未確認。** とくにrustlsが依存するringのARMv6サポート/アセンブリ選択がリスク。CIで実際に両ターゲットをビルドすること。
+1. **APKをまだビルドしていない。** この環境では必要なJDK 21 / Android NDKなどを用意できず、Gradleビルドは未確認。root端末向けAPI 10 APKを実機にインストールできるかも未確認。N-06CはAPKではなくPC側adbを使う。
+2. **aarch64/ARMv6/ARMv7のRustビルドは未確認。** とくにrustlsが依存するringのARMv6サポート/アセンブリ選択がリスク。CIでAPI 21のaarch64と両32bitターゲットを実際にビルドすること。
 3. **N-06Cでの起動・TLS・通信・DNS・adb shell動作は未確認。** `adb shell` の常駐化、`pidof` / `tail` 等の古いtoolbox実装差を実機で確認すること。
-4. **カーネル互換性リスク。** N-06CのLinux 2.6.35カーネルはmuslがPOSIX準拠を想定する2.6.39以降を下回る。adb shellで実行できる可能性はあるが、実機検証なしに動作保証しない。
+4. **カーネル互換性リスク。** N-06CのLinux 2.6.35カーネルはmuslがPOSIX準拠を想定する2.6.39以降を下回る。adb shellで実行できる可能性はあるが、実機検証なしに動作保証しない。Android 5〜6のaarch64はAPI 21ビルドを使う。
 5. **旧APKの更新。** 旧APKは自動更新を行わない。新しいクライアントは新しいAPKを配布して更新する。
 6. **ARMv6を含む両方のABIが本当にAPKに入ること。** `checkLegacyClients` は両assetsを必須とする。CIのartifact download先と `debug` / `release` の配置を確認する。
 7. **署名・配布。** リリースAPKは既存keystore secretsの設定が必要。PRのdebug署名APKは正式配布用ではない。
@@ -76,14 +76,15 @@
 
 1. `ANDROID_LEGACY_HANDOFF.md` と現在の差分を読んで作業を再開する。
 2. CIを回すか同等環境で以下を順番に実行し、最初の失敗を解消する。
+   - `cargo build --locked --bins --release --target aarch64-linux-android --no-default-features --features android-legacy`
    - `cross build --locked --bins --release --target arm-unknown-linux-musleabi --no-default-features --features android-legacy`
    - `cross build --locked --bins --release --target armv7-unknown-linux-musleabi --no-default-features --features android-legacy`
    - 2成果物を `android/legacy/src/main/assets/bin/armeabi/pcsc-rs` と `armeabi-v7a/pcsc-rs` に配置。
    - Java 21 + Android SDK 37で `./gradlew :legacy:assembleRelease`。
 3. APKをzipとして確認し、ManifestのminSdkが10、両ARM payloadが存在することを検証。
-4. 実機またはAndroid 2.3.3エミュレータでインストール・初回root許可・起動/停止・再起動後起動・接続・TLS・DNSを確認。
+4. N-06Cなどの実機でADB許可・バイナリ配置・起動/停止・接続・TLS・DNSを確認。再起動後はADBから再度`install`する。
 5. ringがARMv6ビルドを拒否する場合は、ARMv6 TLS依存を別方式にするか、機能差を明記してARMv6側の提供仕様を再検討。確認前にARMv6対応済みと断定しない。
-6. `scripts/android-adb.sh` / `.ps1` のログ/停止処理を古いtoolbox環境で確認し、プロセス残留や二重起動がないか見る。
+6. `scripts/android-adb.sh` / `.ps1` のログ/停止処理をAndroid 2.3〜6.xのtoolbox環境で確認し、プロセス残留や二重起動がないか見る。
 
 ## 参照情報
 

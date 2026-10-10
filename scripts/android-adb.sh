@@ -18,8 +18,7 @@
 set -eu
 
 DIR=/data/local/tmp/pcsc-rs
-# Android 版（bionic）は Android の DNS を使える。それが無い古いリリースでは musl 版を使う
-# （musl 版は /etc/resolv.conf を探すので、端末によっては DNS が引けない）
+# 64bit ARMはAndroid 5.0+ API 21ビルド、32bit ARMはAndroid 2.3.3+用の静的muslビルドを使う。
 command=install
 binary=
 hostname=
@@ -93,9 +92,11 @@ case "$command" in
     [ -n "$abi" ] || abi=$(adb shell uname -m | tr -d '\r')
     case "$abi" in
       aarch64 | arm64-v8a)
-        targets="aarch64-linux-android aarch64-unknown-linux-musl"
+        # Android 5.0+ arm64 uses the API 21 Android build.
+        targets="aarch64-linux-android"
         ;;
       armv7l | armeabi-v7a)
+        # Android 2.3.3+ 32-bit ARM uses a static musl build.
         targets="armv7-unknown-linux-musleabi"
         ;;
       armv6l | armeabi | arm)
@@ -143,7 +144,7 @@ case "$command" in
     # 値は '…' で囲んで書く（空白や記号があってもそのまま読まれる）。' だけは使えない
     case "$pass$hostname" in *\'*) echo "PASS と名前に ' は使えない" >&2; exit 1 ;; esac
     {
-      printf "PASS='%s'\nPCSC_UPDATED=terminate\n" "$pass"
+      printf "PASS='%s'\n" "$pass"
       [ -z "$hostname" ] || printf "HOSTNAME='%s'\n" "$hostname"
       # ほかの設定（PCSC_URI、DEV_MODE など）はそのまま残す
       printf '%s\n' "$old_env" | grep -vE '^(PASS|PCSC_UPDATED|HOSTNAME)=|^$' || true

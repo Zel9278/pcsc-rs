@@ -33,12 +33,13 @@ jobs:
           - target: i686-pc-windows-msvc
             os: windows-2022
             features: xp
-          # Android's own libc (bionic): DNS goes through Android's resolver, which a
-          # static musl binary cannot use
+          # Android 5.0+ 64-bit ARM (API 21 baseline). The same rustls-only Android
+          # feature is used for old-device ADB installs, so it does not self-update.
           - target: aarch64-linux-android
             os: ubuntu-24.04
-          # Static ARM binaries for the separate Android 2.3+ APK. arm uses the ARMv6 ISA;
-          # armv7 has a faster build for the N-06C and other ARMv7 devices.
+            features: android-legacy
+          # Static ARM binaries for Android 2.3.3+ ADB installs and the legacy APK.
+          # arm uses the ARMv6 ISA; armv7 has a faster build for N-06C and other ARMv7 devices.
           - target: arm-unknown-linux-musleabi
             os: ubuntu-24.04
             features: android-legacy
@@ -60,13 +61,13 @@ jobs:
       - name: Use the Android NDK
         if: ${{ endsWith(matrix.platform.target, '-linux-android') }}
         run: |
-          # The runner image ships the NDK; API 24 (Android 7) is the oldest Rust supports
+          # The runner image ships the NDK. API 21 supports Android 5.0 through 6.x.
           ndk="$ANDROID_NDK_LATEST_HOME"
           bin="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
           echo "ANDROID_NDK_ROOT=$ndk" >> "$GITHUB_ENV"  # for the vendored OpenSSL build
-          echo "CC_aarch64_linux_android=$bin/aarch64-linux-android24-clang" >> "$GITHUB_ENV"
+          echo "CC_aarch64_linux_android=$bin/aarch64-linux-android21-clang" >> "$GITHUB_ENV"
           echo "AR_aarch64_linux_android=$bin/llvm-ar" >> "$GITHUB_ENV"
-          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$bin/aarch64-linux-android24-clang" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$bin/aarch64-linux-android21-clang" >> "$GITHUB_ENV"
           echo "$bin" >> "$GITHUB_PATH"
       - name: Download VC-LTL5 and YY-Thunks for the XP build
         if: ${{ matrix.platform.features == 'xp' }}
@@ -91,7 +92,7 @@ jobs:
           filter: tree:0
           fetch-depth: 0
       - name: Install Cross
-        if: ${{ matrix.platform.features == 'android-legacy' }}
+        if: ${{ endsWith(matrix.platform.target, '-musleabi') }}
         run: cargo install cross --locked --version 0.2.5
       - run: |
           rustup target add ${{ matrix.platform.target }}
@@ -100,7 +101,7 @@ jobs:
           key: ${{ matrix.profile }}-${{ matrix.platform.target }}
       - name: Build binary
         run: |
-          if [[ '${{ matrix.platform.features }}' == android-legacy ]]; then
+          if [[ '${{ matrix.platform.target }}' == *-musleabi ]]; then
             cross build --locked --bins ${{ matrix.profile == 'release' && '--release' || '' }} \
               --target ${{ matrix.platform.target }} --no-default-features --features android-legacy
           else

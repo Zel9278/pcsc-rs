@@ -16,7 +16,7 @@
 # Needs adb (Android SDK Platform-Tools) on PATH, or -Adb / $env:ADB pointing at it.
 # With several devices, pick one with -Serial or $env:ANDROID_SERIAL (see "devices").
 # Same behaviour as android-adb.sh: runs detached, restarts 5 seconds after it exits
-# (crash), survives unplugging and Doze, stops on reboot.
+# (crash), survives unplugging where the device permits it, and stops on reboot.
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
@@ -105,8 +105,10 @@ switch ($Command) {
         $abi = ((Invoke-Remote "getprop ro.product.cpu.abi") -join "").Trim()
         if (-not $abi) { $abi = ((Invoke-Remote "uname -m") -join "").Trim() }
         if ($abi -eq "aarch64" -or $abi -eq "arm64-v8a") {
-            $Targets = @("aarch64-linux-android", "aarch64-unknown-linux-musl")
+            # Android 5.0+ arm64 uses the API 21 Android build.
+            $Targets = @("aarch64-linux-android")
         } elseif ($abi -eq "armv7l" -or $abi -eq "armeabi-v7a") {
+            # Android 2.3.3+ 32-bit ARM uses a static musl build.
             $Targets = @("armv7-unknown-linux-musleabi")
         } elseif ($abi -eq "armv6l" -or $abi -eq "armeabi" -or $abi -eq "arm") {
             $Targets = @("arm-unknown-linux-musleabi")
@@ -147,7 +149,7 @@ switch ($Command) {
             # Values go in single quotes, so spaces and symbols are read as they are; a quote cannot be
             if ("$pass$Hostname".Contains("'")) { throw "PASS and the name cannot contain '" }
 
-            $envText = "PASS='$pass'`nPCSC_UPDATED=terminate`n"
+            $envText = "PASS='$pass'`n"
             if ($Hostname) { $envText += "HOSTNAME='$Hostname'`n" }
             # Keep the other settings (PCSC_URI, DEV_MODE, ...)
             foreach ($line in $oldEnv) {

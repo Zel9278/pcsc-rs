@@ -189,11 +189,11 @@ $env:PASS = "<PASS>"; & ([scriptblock]::Create((irm https://raw.githubuserconten
 - 名前を指定しないと機種名（例: `SH-M28`）になります
 - adb が PATH に無いときは、`--adb /path/to/adb`（PowerShell 版は `-Adb C:\path\to\adb.exe`）か、環境変数 `ADB` で場所を指定します
 - 端末が何台もつながっているときは、`--serial <シリアル>`（PowerShell 版は `-Serial`）か `ANDROID_SERIAL` で選びます。シリアルは `devices` で一覧が出ます（無線デバッグなら `IP:ポート`）
-- 端末のABIに応じて、64bit Androidは`aarch64-linux-android`、ARMv7は
+- 端末のABIに応じて、64bit Android 5.0〜6.xは`aarch64-linux-android`、ARMv7は
   `armv7-unknown-linux-musleabi`、ARMv6は`arm-unknown-linux-musleabi`を自動で選びます。
 - NEC MEDIAS WP N-06Cのようなrootを取れないAndroid 2.3端末も、この手順で動かせます。
   N-06CではUSBデバッグを有効にして、端末でこのPCのRSA鍵を許可してください。
-- Android 2.3向けクライアントは自動更新を行いません。新しいリリースを使うときは、
+- Android 2.3.3〜6.x向けクライアントは自動更新を行いません。新しいリリースを使うときは、
   PCからもう一度`install`してください。
 
 ### Nix
