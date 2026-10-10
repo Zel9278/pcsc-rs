@@ -1,9 +1,9 @@
 #!/bin/sh
 # pcsc-rs の最新リリースを入れて、常に動くように登録する（Linux は systemd、macOS は launchd）。
-# Nix（NixOS・nix-darwin・home-manager）なら flake を使う: https://github.com/Zel9278/pcsc-rs#nix
-#   curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | sudo PASS=<PASS> sh
+# Nix（NixOS・nix-darwin・home-manager）なら flake を使う: https://github.com/SHINTRANET-Lab/pcsc-rs#nix
+#   curl -fsSL https://raw.githubusercontent.com/SHINTRANET-Lab/pcsc-rs/main/install.sh | sudo PASS=<PASS> sh
 #       … システム全体（/usr/local/bin。Linux は system のユニット、macOS は LaunchDaemon）
-#   curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | PASS=<PASS> sh
+#   curl -fsSL https://raw.githubusercontent.com/SHINTRANET-Lab/pcsc-rs/main/install.sh | PASS=<PASS> sh
 #       … このユーザーだけ（~/.local/bin。Linux は systemd --user、macOS は LaunchAgent）
 # 2回目以降は PASS を省くと、既に入っている設定の PASS をそのまま使う。HOSTNAME などほかの設定も引き継ぐ
 set -eu
@@ -26,10 +26,10 @@ if [ "$(id -u)" = 0 ]; then scope=system; else scope=user; fi
 # NixOS の /etc/systemd は設定から作られるので書き換えられない。モジュールを使ってもらう
 if [ -e /etc/NIXOS ]; then
   if [ "$scope" = system ]; then
-    echo "NixOS では flake の NixOS モジュール（services.pcsc-rs）で入れて: https://github.com/Zel9278/pcsc-rs#nix" >&2
+    echo "NixOS では flake の NixOS モジュール（services.pcsc-rs）で入れて: https://github.com/SHINTRANET-Lab/pcsc-rs#nix" >&2
     exit 1
   fi
-  echo "NixOS なので、systemd --user に入れる。home-manager を使っているならモジュールのほうが楽: https://github.com/Zel9278/pcsc-rs#nix" >&2
+  echo "NixOS なので、systemd --user に入れる。home-manager を使っているならモジュールのほうが楽: https://github.com/SHINTRANET-Lab/pcsc-rs#nix" >&2
 fi
 if [ "$scope" = system ]; then bin=/usr/local/bin/pcsc-rs; else bin=$HOME/.local/bin/pcsc-rs; fi
 
@@ -84,14 +84,14 @@ fi
 
 # ---- ダウンロード ----
 
-tag=$(curl -fsSL https://api.github.com/repos/Zel9278/pcsc-rs/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
+tag=$(curl -fsSL https://api.github.com/repos/SHINTRANET-Lab/pcsc-rs/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
 [ -n "$tag" ] || { echo "最新リリースが取れなかった" >&2; exit 1; }
 
 tmp=$(mktemp -d)
 trap 'rm -f "$tmp/pcsc-rs"; rmdir "$tmp"' EXIT
 # 進捗バーは端末で実行したときだけ
 if [ -t 2 ]; then progress=--progress-bar; else progress=-sS; fi
-curl -fL "$progress" -o "$tmp/pcsc-rs" "https://github.com/Zel9278/pcsc-rs/releases/download/$tag/pcsc-rs-$tag-$target"
+curl -fL "$progress" -o "$tmp/pcsc-rs" "https://github.com/SHINTRANET-Lab/pcsc-rs/releases/download/$tag/pcsc-rs-$tag-$target"
 # 動いている古いファイルは書き換えず、置き換える（macOS では上書きするとコード署名の確認で落ちる）。
 # 置き先で作り直すので、SELinux のラベルも置き先のものになる
 mkdir -p "$(dirname "$bin")"

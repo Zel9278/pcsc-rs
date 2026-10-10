@@ -110,11 +110,8 @@ pub struct Identity {
     pub dev: bool,
 }
 
-/// `git describe` of the build, or the crate version when built outside a repository.
-const VERSION: &str = match option_env!("GIT_DESCRIBE") {
-    Some(describe) => describe,
-    None => env!("CARGO_PKG_VERSION"),
-};
+/// Version shown for this client in PC Status.
+const CLIENT_VERSION: &str = "mimizk v0.9.1";
 
 impl SystemStatus {
     pub fn collect(sampler: &Sampler, identity: &Identity) -> Self {
@@ -156,7 +153,7 @@ impl SystemStatus {
             dev: identity.dev,
             _os: format!("{os_name} {os_version}").trim_end().to_owned(),
             hostname,
-            version: format!("Rust client {VERSION}"),
+            version: CLIENT_VERSION.into(),
             cpu,
             ram: MemoryData {
                 free: system.available_memory(),

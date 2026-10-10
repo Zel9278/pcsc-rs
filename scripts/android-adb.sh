@@ -111,12 +111,12 @@ case "$command" in
     tmp=$(mktemp -d)
     trap 'rm -rf "$tmp"' EXIT
     if [ -z "$binary" ]; then
-      tag=$(curl -fsSL https://api.github.com/repos/Zel9278/pcsc-rs/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
+      tag=$(curl -fsSL https://api.github.com/repos/SHINTRANET-Lab/pcsc-rs/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
       [ -n "$tag" ] || { echo "最新リリースが取れなかった" >&2; exit 1; }
       if [ -t 2 ]; then progress=--progress-bar; else progress=-sS; fi
       for target in $targets; do
         # 次の候補に進むのはファイルが無いとき（404）だけ。通信の失敗で musl 版に切り替わらないように
-        code=$(curl -L "$progress" -o "$tmp/pcsc-rs" -w '%{http_code}' "https://github.com/Zel9278/pcsc-rs/releases/download/$tag/pcsc-rs-$tag-$target") || {
+        code=$(curl -L "$progress" -o "$tmp/pcsc-rs" -w '%{http_code}' "https://github.com/SHINTRANET-Lab/pcsc-rs/releases/download/$tag/pcsc-rs-$tag-$target") || {
           echo "ダウンロードに失敗した（$target）" >&2
           exit 1
         }

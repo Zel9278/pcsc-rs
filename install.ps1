@@ -2,7 +2,7 @@
 # ASCII only, so Windows PowerShell 5.1 reads it correctly whether it is run from a
 # file or downloaded with irm.
 #
-#   $env:PASS = "<PASS>"; & ([scriptblock]::Create((irm https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.ps1)))
+#   $env:PASS = "<PASS>"; & ([scriptblock]::Create((irm https://raw.githubusercontent.com/SHINTRANET-Lab/pcsc-rs/main/install.ps1)))
 #       for this user (%LOCALAPPDATA%\pcsc-rs, starts at logon)
 #   ... -System   (in an administrator PowerShell)
 #       for the whole PC (%ProgramFiles%\pcsc-rs, starts at boot as SYSTEM, runs without anyone logged on)
@@ -19,7 +19,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$Repo = "Zel9278/pcsc-rs"
+$Repo = "SHINTRANET-Lab/pcsc-rs"
 # There is no ARM64 build, but Windows on ARM runs x64
 $Target = "x86_64-pc-windows-msvc"
 

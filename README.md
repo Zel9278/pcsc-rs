@@ -34,7 +34,7 @@ HOSTNAME=ホスト名として表示させたい文字列
 ## 対応環境
 
 最近の Windows (Server 含む), macOS, Linux であれば動作すると思います。Windows XP などの古い Windows では、32 ビット版 (`pcsc-rs-…-i686-pc-windows-msvc.exe`) を[手動で入れて](#windows)ください。\
-もし動作しない場合は [Issues](https://github.com/Zel9278/pcsc-rs/issues) から報告をお願いします。
+もし動作しない場合は [Issues](https://github.com/SHINTRANET-Lab/pcsc-rs/issues) から報告をお願いします。
 
 ## 使い方
 
@@ -46,7 +46,7 @@ PowerShell で最新のリリースを入れ、タスクスケジューラに登
 
 ```powershell
 # このユーザーだけ（%LOCALAPPDATA%\pcsc-rs。ログオンしたら起動）
-$env:PASS = "npU7pmkkYfuUdKfqzm2BtDfBPEe4pizrXyPVj8Fby3KaUtehNu3ToDtM8uEdGBr3AS9LRUkZixtZxuKTvsL2e4BVrfzWWG7RqqVThLWsVLHLaJJ8ekeGuHtLBkfZpBtv"; & ([scriptblock]::Create((irm https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.ps1)))
+$env:PASS = "npU7pmkkYfuUdKfqzm2BtDfBPEe4pizrXyPVj8Fby3KaUtehNu3ToDtM8uEdGBr3AS9LRUkZixtZxuKTvsL2e4BVrfzWWG7RqqVThLWsVLHLaJJ8ekeGuHtLBkfZpBtv"; & ([scriptblock]::Create((irm https://raw.githubusercontent.com/SHINTRANET-Lab/pcsc-rs/main/install.ps1)))
 
 # PC 全体（%ProgramFiles%\pcsc-rs。PC の起動時に SYSTEM として起動）: 管理者の PowerShell で、上の行の最後に -System を付ける
 ```
@@ -58,7 +58,7 @@ $env:PASS = "npU7pmkkYfuUdKfqzm2BtDfBPEe4pizrXyPVj8Fby3KaUtehNu3ToDtM8uEdGBr3AS9
 <details>
 <summary>手動で入れる場合</summary>
 
-1. [リリースページ](https://github.com/Zel9278/pcsc-rs/releases)から最新の `pcsc-rs-…-x86_64-pc-windows-msvc.exe` をダウンロードします。
+1. [リリースページ](https://github.com/SHINTRANET-Lab/pcsc-rs/releases)から最新の `pcsc-rs-…-x86_64-pc-windows-msvc.exe` をダウンロードします。
 2. 適当なフォルダに保存し、同じフォルダに `.env` ファイルを作成して以下の Key を追加します。
 
 ```env
@@ -78,10 +78,10 @@ PASS=npU7pmkkYfuUdKfqzm2BtDfBPEe4pizrXyPVj8Fby3KaUtehNu3ToDtM8uEdGBr3AS9LRUkZixt
 
 ```sh
 # システム全体（/usr/local/bin、systemd のサービス）
-curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | sudo PASS=npU7pmkkYfuUdKfqzm2BtDfBPEe4pizrXyPVj8Fby3KaUtehNu3ToDtM8uEdGBr3AS9LRUkZixtZxuKTvsL2e4BVrfzWWG7RqqVThLWsVLHLaJJ8ekeGuHtLBkfZpBtv sh
+curl -fsSL https://raw.githubusercontent.com/SHINTRANET-Lab/pcsc-rs/main/install.sh | sudo PASS=npU7pmkkYfuUdKfqzm2BtDfBPEe4pizrXyPVj8Fby3KaUtehNu3ToDtM8uEdGBr3AS9LRUkZixtZxuKTvsL2e4BVrfzWWG7RqqVThLWsVLHLaJJ8ekeGuHtLBkfZpBtv sh
 
 # このユーザーだけ（~/.local/bin、systemd --user のサービス。sudo 不要）
-curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | PASS=npU7pmkkYfuUdKfqzm2BtDfBPEe4pizrXyPVj8Fby3KaUtehNu3ToDtM8uEdGBr3AS9LRUkZixtZxuKTvsL2e4BVrfzWWG7RqqVThLWsVLHLaJJ8ekeGuHtLBkfZpBtv sh
+curl -fsSL https://raw.githubusercontent.com/SHINTRANET-Lab/pcsc-rs/main/install.sh | PASS=npU7pmkkYfuUdKfqzm2BtDfBPEe4pizrXyPVj8Fby3KaUtehNu3ToDtM8uEdGBr3AS9LRUkZixtZxuKTvsL2e4BVrfzWWG7RqqVThLWsVLHLaJJ8ekeGuHtLBkfZpBtv sh
 ```
 
 - NixOS ではシステム全体には入れられません（`/etc/systemd` が設定から作られるため）。[Nix](#nix) のモジュールを使ってください。
@@ -136,7 +136,7 @@ Raspberry Pi OSでは、Pi Zeroは32-bit OSを使用してください。Pi Zero
 Linux用インストーラーは`uname -m`を自動判定します。
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh |
+curl -fsSL https://raw.githubusercontent.com/SHINTRANET-Lab/pcsc-rs/main/install.sh |
   PASS=<PASS> sh
 ```
 
@@ -153,10 +153,10 @@ Linux と同じコマンドで最新のリリースを入れ、launchd に登録
 
 ```sh
 # このユーザーだけ（~/.local/bin、~/Library/LaunchAgents。sudo 不要）
-curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | PASS=npU7pmkkYfuUdKfqzm2BtDfBPEe4pizrXyPVj8Fby3KaUtehNu3ToDtM8uEdGBr3AS9LRUkZixtZxuKTvsL2e4BVrfzWWG7RqqVThLWsVLHLaJJ8ekeGuHtLBkfZpBtv sh
+curl -fsSL https://raw.githubusercontent.com/SHINTRANET-Lab/pcsc-rs/main/install.sh | PASS=npU7pmkkYfuUdKfqzm2BtDfBPEe4pizrXyPVj8Fby3KaUtehNu3ToDtM8uEdGBr3AS9LRUkZixtZxuKTvsL2e4BVrfzWWG7RqqVThLWsVLHLaJJ8ekeGuHtLBkfZpBtv sh
 
 # Mac 全体（/usr/local/bin、/Library/LaunchDaemons。ログインしていなくても動く）
-curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | sudo PASS=npU7pmkkYfuUdKfqzm2BtDfBPEe4pizrXyPVj8Fby3KaUtehNu3ToDtM8uEdGBr3AS9LRUkZixtZxuKTvsL2e4BVrfzWWG7RqqVThLWsVLHLaJJ8ekeGuHtLBkfZpBtv sh
+curl -fsSL https://raw.githubusercontent.com/SHINTRANET-Lab/pcsc-rs/main/install.sh | sudo PASS=npU7pmkkYfuUdKfqzm2BtDfBPEe4pizrXyPVj8Fby3KaUtehNu3ToDtM8uEdGBr3AS9LRUkZixtZxuKTvsL2e4BVrfzWWG7RqqVThLWsVLHLaJJ8ekeGuHtLBkfZpBtv sh
 ```
 
 - 状態は `launchctl print gui/$(id -u)/io.github.zel9278.pcsc-rs`（Mac 全体なら `sudo launchctl print system/io.github.zel9278.pcsc-rs`）、ログは `~/Library/Logs/pcsc-rs.log`（Mac 全体なら `/var/log/pcsc-rs.log`）。
@@ -165,7 +165,7 @@ curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | s
 
   ```sh
   plutil -insert EnvironmentVariables.HOSTNAME -string "表示したい名前" ~/Library/LaunchAgents/io.github.zel9278.pcsc-rs.plist
-  curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | sh
+  curl -fsSL https://raw.githubusercontent.com/SHINTRANET-Lab/pcsc-rs/main/install.sh | sh
   ```
 
 - 止めて消すとき: `launchctl bootout gui/$(id -u)/io.github.zel9278.pcsc-rs` のあと、plist と `~/.local/bin/pcsc-rs` を消します。
@@ -175,7 +175,7 @@ curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | s
 
 #### アプリ（ワイヤレスデバッグ・Shizuku・root）
 
-[Releases](https://github.com/Zel9278/pcsc-rs/releases/latest) の `pcsc-rs-<バージョン>-android.apk`（arm64）を入れて開き、動かし方を選んで、PASS を入れて「開始」を押します。動かし方は次の3つから選べます。
+[Releases](https://github.com/SHINTRANET-Lab/pcsc-rs/releases/latest) の `pcsc-rs-<バージョン>-android.apk`（arm64）を入れて開き、動かし方を選んで、PASS を入れて「開始」を押します。動かし方は次の3つから選べます。
 
 | 動かし方 | 要るもの | 向いている場合 |
 |---|---|---|
@@ -252,7 +252,7 @@ $env:PASS = "<PASS>"; .\scripts\android-adb.ps1 install -Hostname 表示した�
 ```nix
 # flake.nix
 {
-  inputs.pcsc-rs.url = "github:Zel9278/pcsc-rs";
+  inputs.pcsc-rs.url = "github:SHINTRANET-Lab/pcsc-rs";
 }
 ```
 
@@ -275,7 +275,7 @@ $env:PASS = "<PASS>"; .\scripts\android-adb.ps1 install -Hostname 表示した�
 }
 ```
 
-モジュールを使わずに試すだけなら `PASS=… nix run github:Zel9278/pcsc-rs` で動きます。
+モジュールを使わずに試すだけなら `PASS=… nix run github:SHINTRANET-Lab/pcsc-rs` で動きます。
 
 ## その他の設定
 

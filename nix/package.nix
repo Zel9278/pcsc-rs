@@ -32,7 +32,7 @@ rustPlatform.buildRustPackage {
 
   meta = {
     description = "PC Status client: sends this PC's status to https://pc-stats.eov2.com";
-    homepage = "https://github.com/Zel9278/pcsc-rs";
+    homepage = "https://github.com/SHINTRANET-Lab/pcsc-rs";
     mainProgram = "pcsc-rs";
     platforms = lib.platforms.linux ++ lib.platforms.darwin;
   };

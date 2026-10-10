@@ -13,7 +13,7 @@ use self_update::{
 
 use crate::config::OnUpdate;
 
-const REPO_OWNER: &str = "Zel9278";
+const REPO_OWNER: &str = "SHINTRANET-Lab";
 const REPO_NAME: &str = "pcsc-rs";
 /// Long-running clients look for a new release this often, not only at start.
 const CHECK_INTERVAL: Duration = Duration::from_hours(6);
