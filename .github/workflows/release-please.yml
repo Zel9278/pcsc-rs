@@ -2,6 +2,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 name: release-please
 
@@ -29,16 +30,47 @@ jobs:
           manifest-file: .release-please/.release-please-manifest.json
           skip-github-pull-request: ${{ startsWith(github.event.head_commit.message, 'release:') }}
 
-  build:
+  # The release commit may have created the tag before Actions was enabled.
+  # Recover that tag once so the release and its binaries are still published.
+  recover-v0-9-2:
     needs: release-please
-    if: ${{ needs.release-please.outputs.release_created }}
+    if: ${{ always() && needs.release-please.result == 'success' && needs.release-please.outputs.release_created != 'true' }}
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - name: Create missing v0.9.2 release
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: v0.9.2
+        run: |
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            echo "release_created=false" >> "$GITHUB_OUTPUT"
+            echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          elif git ls-remote --exit-code --tags "https://github.com/$GH_REPO.git" "refs/tags/$TAG_NAME" >/dev/null 2>&1; then
+            gh release create "$TAG_NAME" --title "mimizk-rs v0.9.2" --generate-notes
+            echo "release_created=true" >> "$GITHUB_OUTPUT"
+            echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_created=false" >> "$GITHUB_OUTPUT"
+            echo "tag_name=" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: [release-please, recover-v0-9-2]
+    if: ${{ always() && (needs.release-please.outputs.release_created == 'true' || needs.recover-v0-9-2.outputs.release_created == 'true') }}
     permissions:
       contents: write
     uses: ./.github/workflows/build.yml
     # A called workflow gets no secrets otherwise (the Android signing key)
     secrets: inherit
     with:
-      tag-name: ${{ needs.release-please.outputs.tag_name }}
+      tag-name: ${{ needs.release-please.outputs.tag_name || needs.recover-v0-9-2.outputs.tag_name }}
 
   post-release:
     needs: build
