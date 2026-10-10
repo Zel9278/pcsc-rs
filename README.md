@@ -180,8 +180,17 @@ scripts/android-adb.sh devices  # つながっている端末とシリアル
 Windows の PC からは PowerShell 版（[scripts/android-adb.ps1](scripts/android-adb.ps1)）を使います。
 
 ```powershell
-$env:PASS = "<PASS>"; & ([scriptblock]::Create((irm https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/scripts/android-adb.ps1))) install -Hostname 表示したい名前
+$env:PASS = "<PASS>"; .\scripts\android-adb.ps1 install -Hostname 表示したい名前
 # status / log / stop も同じ形で（install の代わりに書く）
+```
+
+ローカルでビルドしたバイナリを使う場合は、リポジトリ内で実行してください。
+`install`は端末のABIに応じて`target`以下のreleaseバイナリを自動選択します。
+別のファイルを使う場合は`-Binary`で指定します。
+
+```powershell
+$env:PASS = "<PASS>"; .\scripts\android-adb.ps1 install -Hostname 表示したい名前
+.\scripts\android-adb.ps1 install -Binary .\target\armv7-unknown-linux-musleabi\release\pcsc-rs
 ```
 
 - 端末から切り離して動くので、ケーブルを抜いても、画面を消して省電力（Doze）に入っても止まりません。落ちたときは 5 秒後に起動し直します

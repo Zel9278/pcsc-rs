@@ -1,17 +1,14 @@
 # Keep pcsc-rs running on an Android phone, installed from a Windows PC over adb.
 # The PowerShell version of android-adb.sh. ASCII only, so Windows PowerShell 5.1
-# reads it correctly whether it is run from a file or downloaded with irm.
+# reads it correctly when run from a file.
 #
 #   $env:PASS = "<PASS>"; .\scripts\android-adb.ps1 install -Hostname my-phone
-#   .\scripts\android-adb.ps1 install                  later: keeps PASS and the name
-#   .\scripts\android-adb.ps1 install -Binary <file>   install a local build
+#   .\scripts\android-adb.ps1 install                  installs the matching local build
+#   .\scripts\android-adb.ps1 install -Binary <file>   install a specific local build
 #   .\scripts\android-adb.ps1 stop | status | log
 #   .\scripts\android-adb.ps1 devices                 list connected devices and their serials
 #   ... -Adb C:\path\to\adb.exe (or $env:ADB) uses an adb that is not on PATH
 #   ... -Serial <serial> (or $env:ANDROID_SERIAL) picks the device: USB, or IP:port for wireless debugging
-#
-# Straight from GitHub:
-#   $env:PASS = "<PASS>"; & ([scriptblock]::Create((irm https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/scripts/android-adb.ps1))) install -Hostname my-phone
 #
 # Needs adb (Android SDK Platform-Tools) on PATH, or -Adb / $env:ADB pointing at it.
 # With several devices, pick one with -Serial or $env:ANDROID_SERIAL (see "devices").
@@ -31,6 +28,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $Dir = "/data/local/tmp/pcsc-rs"
+$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 # The Android build (bionic) uses Android's DNS resolver. Older releases without it get the musl
 # build, which looks for /etc/resolv.conf and cannot resolve names on some devices.
 if (-not (Get-Command $Adb -ErrorAction SilentlyContinue)) {
@@ -95,6 +93,19 @@ function Get-EnvValue([string[]]$Lines, [string]$Key) {
     $value
 }
 
+function Resolve-LocalBinary([string]$Path, [string]$Target) {
+    $candidate = if ($Path) {
+        $Path
+    } else {
+        Join-Path $RepoRoot "target\$Target\release\pcsc-rs"
+    }
+    $resolved = Resolve-Path -LiteralPath $candidate -ErrorAction SilentlyContinue
+    if (-not $resolved -or -not (Test-Path -LiteralPath $resolved.Path -PathType Leaf)) {
+        throw "Local client binary was not found: $candidate. Build it first or pass -Binary <file>."
+    }
+    $resolved.Path
+}
+
 function Stop-Remote {
     # Stop the loop first (it writes its own PID to loop.pid), then the client
     Invoke-Remote "test -f $Dir/loop.pid && kill `$(cat $Dir/loop.pid) 2>/dev/null; rm -f $Dir/loop.pid; kill `$(pidof pcsc-rs) 2>/dev/null; true" | Out-Null
@@ -116,31 +127,10 @@ switch ($Command) {
             throw "Unsupported architecture: $abi (supported: aarch64, armeabi-v7a, armeabi)"
         }
 
-        $download = $null
-        if (-not $Binary) {
-            [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-            $tag = (Invoke-RestMethod -Uri "https://api.github.com/repos/Zel9278/pcsc-rs/releases/latest" -UseBasicParsing).tag_name
-            if (-not $tag) { throw "Could not get the latest release" }
-            foreach ($target in $Targets) {
-                $download = Join-Path ([IO.Path]::GetTempPath()) "pcsc-rs-$tag-$target"
-                try {
-                    Invoke-WebRequest -Uri "https://github.com/Zel9278/pcsc-rs/releases/download/$tag/pcsc-rs-$tag-$target" -OutFile $download -UseBasicParsing
-                    "Installing $tag ($target)"
-                    break
-                } catch {
-                    Remove-Item -LiteralPath $download -ErrorAction SilentlyContinue
-                    $download = $null
-                    # Try the next build only when this one is not in the release (404), not when the network failed
-                    $status = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 0 }
-                    if ($status -ne 404) { throw "Download failed ($target): $($_.Exception.Message)" }
-                }
-            }
-            if (-not $download) { throw "$tag has no build for Android ABI $abi" }
-            $Binary = $download
-        }
+        $Binary = Resolve-LocalBinary $Binary $Targets[0]
+        "Installing local client ($($Targets[0])): $Binary"
 
-        try {
-            Invoke-Remote "mkdir -p $Dir" | Out-Null
+        Invoke-Remote "mkdir -p $Dir" | Out-Null
             # Without -Hostname or PASS, keep the ones in the installed .env
             $oldEnv = @(Invoke-Adb shell "cat $Dir/.env 2>/dev/null") | ForEach-Object { "$_".TrimEnd("`r") }
             $pass = if ($env:PASS) { $env:PASS } else { Get-EnvValue $oldEnv "PASS" }
@@ -182,9 +172,6 @@ done
                 if ($LASTEXITCODE -eq 0) { break }
             }
             Invoke-Remote "tail -n 8 $Dir/pcsc-rs.log"
-        } finally {
-            if ($download) { Remove-Item -LiteralPath $download -ErrorAction SilentlyContinue }
-        }
     }
     "stop" {
         Stop-Remote
