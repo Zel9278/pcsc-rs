@@ -110,11 +110,19 @@ done
     )
 
     suspend fun status(shell: PrivilegedShell, lines: Int = 40): Status? {
+        // The client, or the loop around it: between two runs of the client (5 seconds), or where
+        // the client's process has another name (Waydroid runs it through houdini64), the loop
+        // is still there to stop
         val result = shell.run(
-            "echo \"pids: \$(pidof pcsc-rs)\"; echo ---; tail -n $lines $DIR/pcsc-rs.log 2>/dev/null; true",
+            "echo \"pids: \$(pidof pcsc-rs)\"; " +
+                "l=\$(cat $DIR/loop.pid 2>/dev/null); " +
+                "if [ -n \"\$l\" ] && grep -q loop.sh /proc/\$l/cmdline 2>/dev/null; then echo \"loop: \$l\"; fi; " +
+                "echo ---; tail -n $lines $DIR/pcsc-rs.log 2>/dev/null; true",
         )
         if (!result.ok) return null
-        val pids = result.output.lineSequence().first().removePrefix("pids:").trim()
+        val head = result.output.substringBefore("---\n").lines()
+        val pids = head.first().removePrefix("pids:").trim()
+        val loop = head.any { it.startsWith("loop:") }
         val log = result.output.substringAfter("---\n", "")
         val logLines = log.lines()
         val version = logLines.lastOrNull { it.startsWith("Checking current version... ") }
@@ -125,7 +133,7 @@ done
                 it.startsWith("Disconnected")
         }
         return Status(
-            running = pids.isNotEmpty(),
+            running = pids.isNotEmpty() || loop,
             version = version,
             connected = lastEvent?.let { it.startsWith("Received hi") },
             log = log,
