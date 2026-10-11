@@ -38,6 +38,9 @@ jobs:
           - target: aarch64-linux-android
             os: ubuntu-24.04
             features: android-legacy
+          - target: armv7-linux-androideabi
+            os: ubuntu-24.04
+            features: android-legacy
           # Static ARM binaries for Android 2.3.3+ ADB installs and the legacy APK.
           # arm uses the ARMv6 ISA; armv7 has a faster build for N-06C and other ARMv7 devices.
           - target: arm-unknown-linux-musleabi
@@ -59,15 +62,22 @@ jobs:
         run: |
           sudo apt-get install -y musl-tools --no-install-recommends
       - name: Use the Android NDK
-        if: ${{ endsWith(matrix.platform.target, '-linux-android') }}
+        if: ${{ contains(matrix.platform.target, '-linux-android') }}
         run: |
           # The runner image ships the NDK. API 21 supports Android 5.0 through 6.x.
           ndk="$ANDROID_NDK_LATEST_HOME"
           bin="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          case '${{ matrix.platform.target }}' in
+            aarch64-linux-android) clang=aarch64-linux-android21-clang ;;
+            armv7-linux-androideabi) clang=armv7a-linux-androideabi21-clang ;;
+          esac
+          triple='${{ matrix.platform.target }}'
+          lower="${triple//-/_}"
+          upper="$(echo "$lower" | tr a-z A-Z)"
           echo "ANDROID_NDK_ROOT=$ndk" >> "$GITHUB_ENV"  # for the vendored OpenSSL build
-          echo "CC_aarch64_linux_android=$bin/aarch64-linux-android21-clang" >> "$GITHUB_ENV"
-          echo "AR_aarch64_linux_android=$bin/llvm-ar" >> "$GITHUB_ENV"
-          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$bin/aarch64-linux-android21-clang" >> "$GITHUB_ENV"
+          echo "CC_${lower}=$bin/$clang" >> "$GITHUB_ENV"
+          echo "AR_${lower}=$bin/llvm-ar" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_${upper}_LINKER=$bin/$clang" >> "$GITHUB_ENV"
           echo "$bin" >> "$GITHUB_PATH"
       - name: Download VC-LTL5 and YY-Thunks for the XP build
         if: ${{ matrix.platform.features == 'xp' }}
