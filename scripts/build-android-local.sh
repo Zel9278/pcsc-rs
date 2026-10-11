@@ -32,7 +32,10 @@ case "$build_kind" in
   arm32)
     targets="arm-unknown-linux-musleabi armv7-unknown-linux-musleabi"
     ;;
-  all | apk)
+  all)
+    targets="aarch64-linux-android armv7-linux-androideabi arm-unknown-linux-musleabi armv7-unknown-linux-musleabi"
+    ;;
+  apk)
     targets="aarch64-linux-android arm-unknown-linux-musleabi armv7-unknown-linux-musleabi"
     ;;
   *)
@@ -85,6 +88,33 @@ EOF
     --no-default-features --features android-legacy
 }
 
+build_armv7android() {
+  if [ -z "$ndk_root" ] || [ ! -d "$ndk_root/toolchains/llvm/prebuilt/linux-x86_64/bin" ]; then
+    cat >&2 <<'EOF'
+Android NDKが見つかりません。
+ANDROID_NDK_ROOTまたはANDROID_SDK_ROOTを設定し、NDKをインストールしてください。
+例: sdkmanager "platform-tools" "platforms;android-36" "ndk;27.2.12479018"
+EOF
+    exit 1
+  fi
+
+  local ndk_bin="$ndk_root/toolchains/llvm/prebuilt/linux-x86_64/bin"
+  local linker="$ndk_bin/armv7a-linux-androideabi21-clang"
+  [ -x "$linker" ] || {
+    echo "NDK API 21 linkerが見つかりません: $linker" >&2
+    exit 1
+  }
+
+  CC_armv7_linux_androideabi="$linker" \
+  AR_armv7_linux_androideabi="$ndk_bin/llvm-ar" \
+  CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER="$linker" \
+  cargo build --locked --release --target armv7-linux-androideabi \
+    --no-default-features --features android-legacy
+  local patcher="$RepoRoot/target/patch-android-api22-elf"
+  rustc --edition=2021 "$RepoRoot/scripts/patch-android-api22-elf.rs" -o "$patcher"
+  "$patcher" "$RepoRoot/target/armv7-linux-androideabi/release/pcsc-rs"
+}
+
 build_arm32() {
   command -v cross >/dev/null 2>&1 || {
     echo "arm32ビルドにはcrossが必要です: cargo install cross --locked" >&2
@@ -117,6 +147,7 @@ case "$build_kind" in
   arm32) build_arm32 ;;
   all)
     build_android64
+    build_armv7android
     build_arm32
     ;;
   apk)
