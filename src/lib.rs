@@ -43,7 +43,10 @@ compile_error!(
 pub fn start(config: &Config) -> ! {
     // Before update::check, whose HTTP client starts threads
     #[cfg(any(target_os = "linux", target_os = "android"))]
-    android::prepare_tls();
+    {
+        android::drop_to_shell_user();
+        android::prepare_tls();
+    }
 
     update::check(config.on_update);
     update::spawn_periodic(config.on_update);

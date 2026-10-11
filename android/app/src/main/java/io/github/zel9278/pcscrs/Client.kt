@@ -19,10 +19,13 @@ cd "${'$'}(dirname "${'$'}0")" || exit 1
 echo ${'$'}${'$'} > loop.pid
 # The name comes from .env (or the device model), not the shell's HOSTNAME
 unset HOSTNAME
-# su 2000 starts without TMPDIR (or with the app's, which the shell user cannot write);
-# the client keeps its CA bundle there
+# su 2000 starts without TMPDIR (or with the app's, which the shell user cannot write)
 export TMPDIR=/data/local/tmp
-while true; do
+# Started through root (Shizuku started by root): the client becomes the shell user itself
+export PCSC_RUN_AS_SHELL=1
+# Runs while loop.pid is this loop's: stopping removes it, which also ends a loop the
+# stopping user cannot kill (one started as root)
+while [ "${'$'}(cat loop.pid 2>/dev/null)" = "${'$'}${'$'}" ]; do
   ./pcsc-rs
   sleep 5
 done
@@ -58,6 +61,11 @@ done
             "export TMPDIR=/data/local/tmp",
             // Shizuku's process has umask 0; only the shell user (and root) may write here
             "umask 022",
+            // Left by an older version run through Shizuku started by root
+            "if [ \"\$(id -u)\" != 0 ] && [ -d $DIR ] && [ ! -w $DIR ]; then",
+            "  echo '$DIR belongs to root. Start once with root or Shizuku started by root, or remove it as root.'",
+            "  exit 1",
+            "fi",
             "mkdir -p $DIR",
             "chmod 755 $DIR",
             "cd $DIR",
@@ -73,6 +81,15 @@ done
             write("loop.sh", LOOP),
             "chmod 600 .env",
             "chmod 755 pcsc-rs loop.sh",
+            // A log left by a loop of another user could not be reopened
+            "rm -f pcsc-rs.log",
+            // Through root (Shizuku started by root), everything stays the shell user's, so
+            // the other ways (wireless debugging, Shizuku through adb, root as su 2000) can
+            // still update, stop and start it. The client switches to the shell user itself.
+            "if [ \"\$(id -u)\" = 0 ]; then",
+            "  chown -R 2000:2000 $DIR",
+            "  chown 2000:2000 /data/local/tmp/pcsc-rs-ca.pem 2>/dev/null || true",
+            "fi",
             "(setsid ./loop.sh > pcsc-rs.log 2>&1 < /dev/null &)",
             "echo started",
         ).joinToString("\n")

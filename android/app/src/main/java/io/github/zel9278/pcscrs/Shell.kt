@@ -29,7 +29,7 @@ interface PrivilegedShell {
 }
 
 /**
- * One `su 2000` process kept open, so the root manager asks (and shows its toast) once
+ * One `su` process kept open, so the root manager asks (and shows its toast) once
  * instead of on every status check.
  */
 object RootShell : PrivilegedShell {
@@ -49,7 +49,7 @@ object RootShell : PrivilegedShell {
     private var input: Writer? = null
     private var output: BufferedReader? = null
 
-    /** Cleared when this root manager's su does not take -g / -G (they are newer than su itself) */
+    /** Cleared when this root manager's su does not take -g / -G; then the shell is root */
     private var withGroups = true
 
     override suspend fun run(command: String): ShellResult = withContext(Dispatchers.IO) {
@@ -95,6 +95,7 @@ object RootShell : PrivilegedShell {
      * As the shell user (uid 2000) with its groups, like adb and Shizuku: the client never runs
      * as root, its files stay the shell user's (nothing a shell process can plant is run as
      * root), and switching to wireless debugging or Shizuku later can still stop it.
+     * Without -g / -G, as root (see below).
      */
     private fun open() {
         if (process?.alive() == true) return
@@ -107,11 +108,13 @@ object RootShell : PrivilegedShell {
                 null
             }
             if (id?.ok == true && id.output.trim() == "2000") return
-            // An older su that rejects -g / -G: plain su 2000, which cannot look up names
+            // A su that rejects -g / -G: plain su 2000 would have no groups and could not
+            // look up names, so run as root; Client.start then gives the files to the shell
+            // user, and the client switches to it with its groups by itself
             close()
             withGroups = false
         }
-        start(listOf("su", "2000"))
+        start(listOf("su"))
     }
 
     private fun start(command: List<String>) {
