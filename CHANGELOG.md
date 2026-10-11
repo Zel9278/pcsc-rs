@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.10.0](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.9.3...v0.10.0) (2026-10-11)
+## [0.9.4](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.9.3...v0.10.0) (2026-10-11)
 
 
 ### Features
