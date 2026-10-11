@@ -219,6 +219,90 @@ $env:PASS = "<PASS>"; .\scripts\android-adb.ps1 install -Hostname 表示した�
 ```powershell
 $env:PASS = "<PASS>"; .\scripts\android-adb.ps1 install -Hostname 表示したい名前
 .\scripts\android-adb.ps1 install -Binary .\target\armv7-unknown-linux-musleabi\release\pcsc-rs
+# 32bit ARM の Android 5.0 以降で、Android 標準の DNS リゾルバを使う版を入れる
+.\scripts\android-adb.ps1 install -Libc bionic
+```
+
+- 端末から切り離して動くので、ケーブルを抜いても、画面を消して省電力（Doze）に入っても止まりません。落ちたときは 5 秒後に起動し直します
+- 端末を再起動すると止まるので、もう一度 `install` してください（2回目からは `PASS` と名前を引き継ぎます）
+- 名前を指定しないと機種名（例: `SH-M28`）になります
+- adb が PATH に無いときは、`--adb /path/to/adb`（PowerShell 版は `-Adb C:\path\to\adb.exe`）か、環境変数 `ADB` で場所を指定します
+- 端末が何台もつながっているときは、`--serial <シリアル>`（PowerShell 版は `-Serial`）か `ANDROID_SERIAL` で選びます。シリアルは `devices` で一覧が出ます（無線デバッグなら `IP:ポート`）
+- 端末のABIに応じて、64bit Android 5.0〜6.xは`aarch64-linux-android`、ARMv7は
+  `armv7-unknown-linux-musleabi`、ARMv6は`arm-unknown-linux-musleabi`を自動で選びます。
+  PowerShell版は`-Libc bionic`を付けると、ARMv7でも`armv7-linux-androideabi`を選びます。
+  `-Libc musl`はmusl版を明示し、`-Libc auto`（既定）は従来どおりの自動選択です。
+- ARMv7でAndroid 5.0以降の端末では、`-Libc bionic`で入れる`armv7-linux-androideabi`版をおすすめします。
+  musl版は`/etc/resolv.conf`でDNSサーバーを探しますが、Androidにはこのファイルが無いため、
+  端末によっては`failed to lookup address information`で名前解決に失敗します。
+  bionic版はAndroidのDNSリゾルバを使うので、この問題が起きません。Android 4.4以前では動きません。
+- `mimizk-rs-<バージョン>-armv7-linux-androideabi`は[Releases](https://github.com/SHINTRANET-Lab/pcsc-rs/releases/latest)に
+  添付されます。ダウンロードして`-Binary`で指定すると使えます。musl版と同じく自動更新は行いません。
+- NEC MEDIAS WP N-06Cのようなrootを取れないAndroid 2.3端末も、この手順で動かせます。
+  N-06CではUSBデバッグを有効にして、端末でこのPCのRSA鍵を許可してください。
+- Android 2.3.3〜6.x向けクライアントは自動更新を行いません。新しいリリースを使うときは、
+  PCからもう一度`install`してください。
+- GitHub Actionsを使わずローカルでビルドする場合は、WSLで
+  `scripts/build-android-local.sh android64`を実行できます。ARMv6/ARMv7向けは
+  `scripts/build-android-local.sh arm32`を使い、`cross`とDockerが必要です。
+  両方のAPKまで作る場合は`./scripts/build-android-local.sh apk`を実行します。
+- WindowsホストからはPowerShell版の
+  `.\scripts\build-android-local.ps1 android64`を使えます。ARMv6/ARMv7向けは
+  `.\scripts\build-android-local.ps1 arm32`、両方のAPKまで作る場合は
+  `.\scripts\build-android-local.ps1 apk`を実行します。PowerShell版のARM32/APKビルドには
+  WSL（Rustと`cross`を導入済み）およびDocker DesktopのWSL統合が必要です。
+  既定のディストリビューションは`Lavuntu`です。別のディストリビューションを使う場合は
+  `-WslDistribution Ubuntu`のように指定してください。ビルドはDocker内のARM用GCCが
+  並列時に不安定な古い環境にも対応するため、既定で1ジョブずつ実行します。
+  ARMv7のbionic版は、NDKだけで作れます（WSLとDockerは要りません）。
+  `.\scripts\build-android-local.ps1 armv7`を実行します。
+
+#### アプリ（ワイヤレスデバッグ・Shizuku・root）
+
+[Releases](https://github.com/SHINTRANET-Lab/pcsc-rs/releases/latest) の `mimizk-rs-<バージョン>-android.apk`（arm64）を入れて開き、動かし方を選んで、PASS を入れて「開始」を押します。動かし方は次の3つから選べます。
+
+| 動かし方 | 要るもの | 向いている場合 |
+|---|---|---|
+| ワイヤレスデバッグ | Android 11 以降・Wi-Fi。最初に一度だけペアリングする（コードは通知に入力） | root も Shizuku も無い |
+| Shizuku | [Shizuku](https://shizuku.rikka.app/) が動いていること | もう Shizuku を使っている。一度起動すれば、再起動まで Wi-Fi なしで操作できる |
+| root | root 化した端末（`su 2000` で shell の権限に下げて動かす） | 再起動後の自動開始を確実にしたい |
+
+- 動かし方は下の adb 版と同じで、`/data/local/tmp/pcsc-rs` に置いて端末から切り離して動かします。アプリを閉じても動き続けます
+- ワイヤレスデバッグと Shizuku のときは、開発者向けオプションの USB デバッグをオンにしておいてください。オフだと、ワイヤレスデバッグがオフになったとき（Wi-Fi が切れたときも）に adbd と一緒にクライアントも止まります
+- adb 版で入れていたときは、PASS と名前をそのまま読み込みます
+- ワイヤレスデバッグは、ペアリングしたあとはアプリが自分でオンにできます（ネットワークごとに初回だけ「このネットワークで常に許可」が要ります）
+- 「スマホの再起動後に自動で開始」: root はそのまま、ワイヤレスデバッグは許可済みの Wi-Fi につながっていれば、Shizuku は Shizuku も起動時に動く（Sui や root）ときだけ効きます
+
+自分でビルドするときは [android/README.md](android/README.md) を見てください。Android 2.3
+（API 10）のrootを取れない端末では、下のadb版を使ってください。
+
+#### PC から adb で
+
+root なしで、PC から adb で入れます（[scripts/android-adb.sh](scripts/android-adb.sh)）。adb shell の権限で動くので、CPU（コアごと）・GPU（Adreno）・ロードアベレージも取れます。古い Android で CPU/GPU の sysfs 名が取得できない場合も、SoC 名や `/proc/cpuinfo` から `Krait`、`Cortex-A53`、`Adreno 330` などを補完します。
+
+```sh
+# USB か、無線デバッグ（adb pair / adb connect）でつないでから
+PASS=<PASS> scripts/android-adb.sh install --hostname 表示したい名前
+scripts/android-adb.sh status   # 動いているか
+scripts/android-adb.sh log      # ログ
+scripts/android-adb.sh stop     # 止める
+scripts/android-adb.sh devices  # つながっている端末とシリアル
+```
+
+Windows の PC からは PowerShell 版（[scripts/android-adb.ps1](scripts/android-adb.ps1)）を使います。
+
+```powershell
+$env:PASS = "<PASS>"; .\scripts\android-adb.ps1 install -Hostname 表示したい名前
+# status / log / stop も同じ形で（install の代わりに書く）
+```
+
+ローカルでビルドしたバイナリを使う場合は、リポジトリ内で実行してください。
+`install`は端末のABIに応じて`target`以下のreleaseバイナリを自動選択します。
+別のファイルを使う場合は`-Binary`で指定します。
+
+```powershell
+$env:PASS = "<PASS>"; .\scripts\android-adb.ps1 install -Hostname 表示したい名前
+.\scripts\android-adb.ps1 install -Binary .\target\armv7-unknown-linux-musleabi\release\pcsc-rs
 ```
 
 - 端末から切り離して動くので、ケーブルを抜いても、画面を消して省電力（Doze）に入っても止まりません。落ちたときは 5 秒後に起動し直します
