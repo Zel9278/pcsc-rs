@@ -156,36 +156,23 @@ function Start-RemoteDetached([string]$RemoteCommand) {
 
     } -ArgumentList @($Adb, ($SerialArgs -join "`n"), $RemoteCommand)
 
-    try {
-
+        try {
         $started = $false
-
-        for ($attempt = 0; $attempt -lt 20; $attempt++) {
-
+        # Start-Job launches a new PowerShell process, and old phones are slow to run
+        # loop.sh, so a job that has already ended does not mean the start failed.
+        for ($attempt = 0; $attempt -lt 40; $attempt++) {
             Start-Sleep -Milliseconds 250
-
-            $pids = @(Invoke-Remote "cat $Dir/loop.pid 2>/dev/null")
-
+            $pids = @(Invoke-Remote "cat $Dir/loop.pid 2>/dev/null; true")
             if ($pids.Count -gt 0 -and $pids[0] -match '^\d+$') {
-
                 $started = $true
-
                 break
-
             }
-
-            if ($job.State -ne "Running") { break }
-
         }
-
         if (-not $started) {
-
             $jobOutput = @(Receive-Job $job -Keep 2>&1 | ForEach-Object { "$_" }) -join "`n"
-
-            throw "Remote client did not start (loop.pid was not created). $jobOutput"
-
+            $remoteLog = @(Invoke-Adb shell "cat $Dir/pcsc-rs.log 2>/dev/null") -join "`n"
+            throw "Remote client did not start (loop.pid was not created). $jobOutput`n$remoteLog"
         }
-
     } finally {
 
         if ($job.State -eq "Running") { Stop-Job $job }
@@ -438,7 +425,7 @@ Invoke-Remote "cd $Dir && : > pcsc-rs.log" | Out-Null
 
 # Detach all standard streams; old Android toolbox does not provide setsid.
 
-Start-RemoteDetached "cd $Dir && nohup ./loop.sh > $Dir/pcsc-rs.log 2>&1 < /dev/null &"
+Start-RemoteDetached "cd $Dir && if [ -x /system/bin/nohup ] || [ -x /system/xbin/nohup ]; then nohup ./loop.sh > $Dir/pcsc-rs.log 2>&1 < /dev/null & else ./loop.sh > $Dir/pcsc-rs.log 2>&1 < /dev/null & fi"
 
 $logLines = @(Get-RemoteLog 8)
 
