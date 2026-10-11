@@ -1,6 +1,6 @@
 [package]
 name = "mimizk-rs"
-version = "0.9.6"
+version = "0.9.7"
 edition = "2024"
 rust-version = "1.98"
 
@@ -68,6 +68,9 @@ winres = "=0.1.12"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_System_Power"] }
+
+[target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
+libc = "=0.2.190"
 
 [target.'cfg(not(any(target_os = "windows", target_os = "macos", target_os = "ios")))'.dependencies]
 openssl = { version = "=0.10.81", optional = true, features = ["vendored"] }

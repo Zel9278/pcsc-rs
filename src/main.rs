@@ -39,6 +39,14 @@ fn load_env_file() {
 }
 
 fn main() {
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    if env::args_os()
+        .nth(1)
+        .is_some_and(|a| a == "--as-shell-user")
+    {
+        pcsc_rs::exec_as_shell_user(env::args_os().skip(2));
+    }
+
     load_env_file();
 
     if !sysinfo::IS_SUPPORTED_SYSTEM {

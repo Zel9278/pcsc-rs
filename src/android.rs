@@ -151,6 +151,65 @@ fn temp_dir() -> PathBuf {
     env::var_os("TMPDIR").map_or_else(|| PathBuf::from("/data/local/tmp"), PathBuf::from)
 }
 
+/// The shell user, and the groups adbd gives it. inet (3003) is needed for name lookups:
+/// netd's DNS socket is root:inet 0660.
+const SHELL_UID: u32 = 2000;
+const SHELL_GROUPS: [u32; 15] = [
+    2000, 3003, 1004, 1007, 1011, 1015, 1028, 1078, 1079, 3001, 3002, 3006, 3009, 3011, 3012,
+];
+
+/// `pcsc-rs --as-shell-user COMMAND...`: the Android app's start when it has root (root
+/// mode, or Shizuku started by root). Root runs only this copy of the client, from the APK
+/// (which the shell user cannot change); it becomes the shell user with adb's groups and
+/// runs COMMAND, the loop that keeps the client running. So nothing the shell user can
+/// write is run as root, and the client and its files are the same in every mode.
+pub fn exec_as_shell_user(mut command: impl Iterator<Item = std::ffi::OsString>) -> ! {
+    use std::os::unix::process::CommandExt;
+    let fail = |message: String| -> ! {
+        elog!("{message}");
+        std::process::exit(1)
+    };
+    if !is_android() {
+        fail("--as-shell-user is for Android".to_owned());
+    }
+    let Some(program) = command.next() else {
+        fail("--as-shell-user needs a command".to_owned());
+    };
+    // SAFETY: plain libc calls; this process runs nothing else.
+    unsafe {
+        if libc::getuid() == 0
+            && (libc::setgroups(SHELL_GROUPS.len(), SHELL_GROUPS.as_ptr()) != 0
+                || libc::setgid(SHELL_UID) != 0
+                || libc::setuid(SHELL_UID) != 0)
+        {
+            fail(format!(
+                "Could not switch to the shell user: {}",
+                std::io::Error::last_os_error()
+            ));
+        }
+        if libc::getuid() != SHELL_UID {
+            fail(format!(
+                "--as-shell-user: running as uid {}, not root or the shell user",
+                libc::getuid()
+            ));
+        }
+    }
+    let error = std::process::Command::new(&program).args(command).exec();
+    fail(format!(
+        "Failed to run {}: {error}",
+        Path::new(&program).display()
+    ))
+}
+
+/// Where the CA bundle goes: next to the client first (its own directory, so a bundle a
+/// different user left elsewhere cannot get in the way), then the temporary directory.
+fn ca_bundle_dirs() -> Vec<PathBuf> {
+    let exe_dir = env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(Path::to_path_buf));
+    exe_dir.into_iter().chain([temp_dir()]).collect()
+}
+
 /// OpenSSL cannot use Android's CA directory (its files are named by an older
 /// hash), so join the certificates into one PEM file and point `SSL_CERT_FILE`
 /// at it. Must run before any other thread starts, since it sets an
@@ -177,11 +236,21 @@ pub fn prepare_tls() {
     if bundle.is_empty() {
         return;
     }
-    let path = temp_dir().join("pcsc-rs-ca.pem");
-    if let Err(e) = fs::write(&path, bundle) {
-        elog!("Failed to write {}: {e}", path.display());
+    for dir in ca_bundle_dirs() {
+        let path = dir.join("pcsc-rs-ca.pem");
+        match fs::write(&path, &bundle) {
+            Ok(()) => {}
+            // A bundle another user wrote (e.g. root) still has the same roots
+            Err(_)
+                if fs::metadata(&path).is_ok_and(|m| m.len() > 0)
+                    && fs::File::open(&path).is_ok() => {}
+            Err(e) => {
+                elog!("Failed to write {}: {e}", path.display());
+                continue;
+            }
+        }
+        // SAFETY: called at the very start, before any other thread exists.
+        unsafe { env::set_var("SSL_CERT_FILE", &path) };
         return;
     }
-    // SAFETY: called at the very start, before any other thread exists.
-    unsafe { env::set_var("SSL_CERT_FILE", &path) };
 }
