@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.7](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.9.6...v0.9.7) (2026-10-11)
+
+
+### Bug Fixes
+
+* mut ([cf454fd](https://github.com/SHINTRANET-Lab/pcsc-rs/commit/cf454fdff849c2d28baa0d60ce844ae7438fa8e6))
+
 ## [0.9.6](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.9.5...v0.9.6) (2026-10-11)
 
 
