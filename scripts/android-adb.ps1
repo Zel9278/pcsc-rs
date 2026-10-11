@@ -23,7 +23,9 @@ param(
     [string]$Binary,
     [int]$Lines = 30,
     [string]$Adb = $(if ($env:ADB) { $env:ADB } else { "adb" }),
-    [string]$Serial = $env:ANDROID_SERIAL
+    [string]$Serial = $env:ANDROID_SERIAL,
+    [ValidateSet("auto", "bionic", "musl")]
+    [string]$Libc = "auto"
 )
 
 $ErrorActionPreference = "Stop"
@@ -138,12 +140,19 @@ switch ($Command) {
         $abi = ((Invoke-Remote "getprop ro.product.cpu.abi") -join "").Trim()
         if (-not $abi) { $abi = ((Invoke-Remote "uname -m") -join "").Trim() }
         if ($abi -eq "aarch64" -or $abi -eq "arm64-v8a") {
-            # Android 5.0+ arm64 uses the API 21 Android build.
+            # Android 5.0+ arm64 only has the bionic build.
+            if ($Libc -eq "musl") { throw "No musl build for arm64. Use -Libc bionic or auto." }
             $Targets = @("aarch64-linux-android")
         } elseif ($abi -eq "armv7l" -or $abi -eq "armeabi-v7a") {
-            # Android 2.3.3+ 32-bit ARM uses a static musl build.
-            $Targets = @("armv7-unknown-linux-musleabi")
+            if ($Libc -eq "bionic") {
+                # Needs Android 5.0 (API 21) or later.
+                $Targets = @("armv7-linux-androideabi")
+            } else {
+                # Android 2.3.3+ 32-bit ARM uses a static musl build.
+                $Targets = @("armv7-unknown-linux-musleabi")
+            }
         } elseif ($abi -eq "armv6l" -or $abi -eq "armeabi" -or $abi -eq "arm") {
+            if ($Libc -eq "bionic") { throw "No bionic build for armeabi. Use -Libc musl or auto." }
             $Targets = @("arm-unknown-linux-musleabi")
         } else {
             throw "Unsupported architecture: $abi (supported: aarch64, armeabi-v7a, armeabi)"
