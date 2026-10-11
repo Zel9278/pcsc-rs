@@ -30,27 +30,14 @@ interface PrivilegedShell {
 
 /**
  * One `su` process kept open, so the root manager asks (and shows its toast) once
- * instead of on every status check.
+ * instead of on every status check. The shell is root; Client.start gives the files to the
+ * shell user and starts the loop as the shell user, so the client itself never runs as root.
  */
 object RootShell : PrivilegedShell {
-    /**
-     * The groups adbd gives the shell user. Plain `su 2000` has none of them, and without
-     * inet (3003) the process cannot reach netd's DNS socket (`dnsproxyd`, root:inet 0660):
-     * every name lookup fails although sockets to addresses work.
-     */
-    private val SHELL_GROUPS = listOf(
-        3003, // inet
-        1004, 1007, 1011, 1015, 1028, 1078, 1079, // input, log, adb, sdcard_rw, sdcard_r, ext_data_rw, ext_obb_rw
-        3001, 3002, 3006, 3009, 3011, 3012, // net_bt_admin, net_bt, net_bw_stats, readproc, uhid, readtracefs
-    )
-
     private val lock = Mutex()
     private var process: Process? = null
     private var input: Writer? = null
     private var output: BufferedReader? = null
-
-    /** Cleared when this root manager's su does not take -g / -G; then the shell is root */
-    private var withGroups = true
 
     override suspend fun run(command: String): ShellResult = withContext(Dispatchers.IO) {
         lock.withLock {
@@ -91,30 +78,8 @@ object RootShell : PrivilegedShell {
         }
     }
 
-    /**
-     * As the shell user (uid 2000) with its groups, like adb and Shizuku: the client never runs
-     * as root, its files stay the shell user's (nothing a shell process can plant is run as
-     * root), and switching to wireless debugging or Shizuku later can still stop it.
-     * Without -g / -G, as root (see below).
-     */
     private fun open() {
-        if (process?.alive() == true) return
-        if (withGroups) {
-            // Options before the user: su stops reading options there (Magisk, KernelSU)
-            start(listOf("su", "-g", "2000") + SHELL_GROUPS.flatMap { listOf("-G", "$it") } + "2000")
-            val id = try {
-                send("id -u")
-            } catch (_: IOException) {
-                null
-            }
-            if (id?.ok == true && id.output.trim() == "2000") return
-            // A su that rejects -g / -G: plain su 2000 would have no groups and could not
-            // look up names, so run as root; Client.start then gives the files to the shell
-            // user, and the client switches to it with its groups by itself
-            close()
-            withGroups = false
-        }
-        start(listOf("su"))
+        if (process?.alive() != true) start(listOf("su"))
     }
 
     private fun start(command: List<String>) {

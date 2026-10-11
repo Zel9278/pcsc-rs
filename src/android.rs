@@ -67,30 +67,47 @@ const SHELL_GROUPS: [u32; 15] = [
     2000, 3003, 1004, 1007, 1011, 1015, 1028, 1078, 1079, 3001, 3002, 3006, 3009, 3011, 3012,
 ];
 
-/// The Android app starts the client with `PCSC_RUN_AS_SHELL=1`. When that start went
-/// through root anyway (Shizuku started by root, or a `su` without `-G`), become the shell
-/// user with its groups, as with adb, so the client never runs as root and its files stay
-/// the shell user's. Must run before any other thread starts.
-pub fn drop_to_shell_user() {
-    if !is_android() || env::var_os("PCSC_RUN_AS_SHELL").is_none() {
-        return;
+/// `pcsc-rs --as-shell-user COMMAND...`: the Android app's start when it has root (root
+/// mode, or Shizuku started by root). Root runs only this copy of the client, from the APK
+/// (which the shell user cannot change); it becomes the shell user with adb's groups and
+/// runs COMMAND, the loop that keeps the client running. So nothing the shell user can
+/// write is run as root, and the client and its files are the same in every mode.
+pub fn exec_as_shell_user(mut command: impl Iterator<Item = std::ffi::OsString>) -> ! {
+    use std::os::unix::process::CommandExt;
+    let fail = |message: String| -> ! {
+        elog!("{message}");
+        std::process::exit(1)
+    };
+    if !is_android() {
+        fail("--as-shell-user is for Android".to_owned());
     }
-    // SAFETY: plain libc calls; nothing else runs yet.
+    let Some(program) = command.next() else {
+        fail("--as-shell-user needs a command".to_owned());
+    };
+    // SAFETY: plain libc calls; this process runs nothing else.
     unsafe {
-        if libc::getuid() != 0 {
-            return;
-        }
-        if libc::setgroups(SHELL_GROUPS.len(), SHELL_GROUPS.as_ptr()) != 0
-            || libc::setgid(SHELL_UID) != 0
-            || libc::setuid(SHELL_UID) != 0
+        if libc::getuid() == 0
+            && (libc::setgroups(SHELL_GROUPS.len(), SHELL_GROUPS.as_ptr()) != 0
+                || libc::setgid(SHELL_UID) != 0
+                || libc::setuid(SHELL_UID) != 0)
         {
-            // Keep running as root rather than not at all
-            elog!(
+            fail(format!(
                 "Could not switch to the shell user: {}",
                 std::io::Error::last_os_error()
-            );
+            ));
+        }
+        if libc::getuid() != SHELL_UID {
+            fail(format!(
+                "--as-shell-user: running as uid {}, not root or the shell user",
+                libc::getuid()
+            ));
         }
     }
+    let error = std::process::Command::new(&program).args(command).exec();
+    fail(format!(
+        "Failed to run {}: {error}",
+        Path::new(&program).display()
+    ))
 }
 
 /// Where the CA bundle goes: next to the client first (its own directory, so a bundle a
