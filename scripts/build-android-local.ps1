@@ -124,6 +124,13 @@ function Build-Armv7Android {
             "build", "--locked", "--release", "--target", "armv7-linux-androideabi",
             "--no-default-features", "--features", "android-legacy"
         )
+        $patcher = Join-Path $RepoRoot "target\patch-android-api22-elf.exe"
+        Invoke-External "rustc" @(
+            "--edition=2021", (Join-Path $RepoRoot "scripts\patch-android-api22-elf.rs"), "-o", $patcher
+        )
+        Invoke-External $patcher @(
+            (Join-Path $RepoRoot "target\armv7-linux-androideabi\release\pcsc-rs")
+        )
     } finally {
         Pop-Location
     }

@@ -228,6 +228,7 @@ $env:PASS = "<PASS>"; .\scripts\android-adb.ps1 install -Hostname 表示した�
 - 名前を指定しないと機種名（例: `SH-M28`）になります
 - adb が PATH に無いときは、`--adb /path/to/adb`（PowerShell 版は `-Adb C:\path\to\adb.exe`）か、環境変数 `ADB` で場所を指定します
 - 端末が何台もつながっているときは、`--serial <シリアル>`（PowerShell 版は `-Serial`）か `ANDROID_SERIAL` で選びます。シリアルは `devices` で一覧が出ます（無線デバッグなら `IP:ポート`）
+- Android NDKはPATHか、環境変数`ANDROID_NDK_ROOT`で指定します
 - 端末のABIに応じて、64bit Android 5.0〜6.xは`aarch64-linux-android`、ARMv7は
   `armv7-unknown-linux-musleabi`、ARMv6は`arm-unknown-linux-musleabi`を自動で選びます。
   PowerShell版は`-Libc bionic`を付けると、ARMv7でも`armv7-linux-androideabi`を選びます。
