@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.9.6](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.9.5...v0.9.6) (2026-10-11)
+
+
+### Bug Fixes
+
+* apk ([e1fcd05](https://github.com/SHINTRANET-Lab/pcsc-rs/commit/e1fcd05360a097b002912c99ac2d76c93a6d40df))
+* local build script ([abc6686](https://github.com/SHINTRANET-Lab/pcsc-rs/commit/abc6686175477543c4de6ed65953da06f770ad72))
+* name ([c55efef](https://github.com/SHINTRANET-Lab/pcsc-rs/commit/c55efefac9fcf8aeca55f883f55395785f95f1bf))
+
 ## [0.9.5](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.9.4...v0.9.5) (2026-10-11)
 
 
