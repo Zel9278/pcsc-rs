@@ -38,6 +38,13 @@ compile_error!(
     "the xp feature replaces native-tls: build with --no-default-features --features xp"
 );
 
+/// `--as-shell-user COMMAND...` (Android): runs COMMAND as the shell user; see
+/// [`android::exec_as_shell_user`].
+#[cfg(any(target_os = "linux", target_os = "android"))]
+pub fn exec_as_shell_user(command: impl Iterator<Item = std::ffi::OsString>) -> ! {
+    android::exec_as_shell_user(command)
+}
+
 /// Checks for an update, starts the system monitor, keeps a connection to the
 /// PC Status server, and never returns.
 pub fn start(config: &Config) -> ! {

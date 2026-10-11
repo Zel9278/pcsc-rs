@@ -309,9 +309,8 @@ private fun App(shizukuChanges: MutableIntState) {
                     label = if (settings.mode == Mode.ROOT) stringResource(R.string.root_ok) else stringResource(R.string.use_root),
                     onSelect = {
                         scope.launch {
-                            // RootShell is `su 2000`: the shell user, not root
                             val result = RootShell.run("id -u")
-                            if (result.ok && result.output.trim() == "2000") {
+                            if (result.ok && result.output.trim() == "0") {
                                 rootError = null
                                 update(settings.copy(mode = Mode.ROOT))
                             } else {

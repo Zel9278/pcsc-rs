@@ -1067,6 +1067,7 @@ dependencies = [
  "cfg-if",
  "dotenvy",
  "git2",
+ "libc",
  "native-tls",
  "openssl",
  "rustls",

@@ -29,8 +29,9 @@ interface PrivilegedShell {
 }
 
 /**
- * One `su 2000` process kept open, so the root manager asks (and shows its toast) once
- * instead of on every status check.
+ * One `su` process kept open, so the root manager asks (and shows its toast) once
+ * instead of on every status check. The shell is root; Client.start gives the files to the
+ * shell user and starts the loop as the shell user, so the client itself never runs as root.
  */
 object RootShell : PrivilegedShell {
     private val lock = Mutex()
@@ -51,7 +52,13 @@ object RootShell : PrivilegedShell {
     }
 
     private fun exchange(command: String): ShellResult {
-        val (stdin, stdout) = open()
+        open()
+        return send(command)
+    }
+
+    private fun send(command: String): ShellResult {
+        val stdin = input!!
+        val stdout = output!!
         val marker = "__PCSC_END_${UUID.randomUUID()}__"
         // In a subshell, so `exit` or `cd` in the command do not end or move the shell
         stdin.write("(\n$command\n) 2>&1 </dev/null\n__pcsc_rc=\$?\necho\necho \"$marker \$__pcsc_rc\"\n")
@@ -71,17 +78,15 @@ object RootShell : PrivilegedShell {
         }
     }
 
-    private fun open(): Pair<Writer, BufferedReader> {
-        val running = process?.takeIf { it.alive() }
-        if (running != null) return input!! to output!!
-        // As the shell user (uid 2000), like adb and Shizuku: the client never runs as root, its
-        // files stay the shell user's (nothing a shell process can plant is run as root), and
-        // switching to wireless debugging or Shizuku later can still stop it
-        val started = ProcessBuilder("su", "2000").redirectErrorStream(true).start()
+    private fun open() {
+        if (process?.alive() != true) start(listOf("su"))
+    }
+
+    private fun start(command: List<String>) {
+        val started = ProcessBuilder(command).redirectErrorStream(true).start()
         process = started
         input = started.outputStream.bufferedWriter()
         output = started.inputStream.bufferedReader()
-        return input!! to output!!
     }
 
     private fun close() {

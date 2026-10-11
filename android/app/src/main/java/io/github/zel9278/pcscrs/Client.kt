@@ -19,15 +19,21 @@ cd "${'$'}(dirname "${'$'}0")" || exit 1
 echo ${'$'}${'$'} > loop.pid
 # The name comes from .env (or the device model), not the shell's HOSTNAME
 unset HOSTNAME
-while true; do
+# Started from root (through the client's --as-shell-user), TMPDIR may be missing or
+# the app's, which the shell user cannot write
+export TMPDIR=/data/local/tmp
+# Runs while loop.pid is this loop's: stopping removes it, so a loop that could not be
+# killed (left by an older version as root) still ends
+while [ "${'$'}(cat loop.pid 2>/dev/null)" = "${'$'}${'$'}" ]; do
   ./pcsc-rs
   sleep 5
 done
 """
 
+    // Each step may find nothing to stop; `|| true` keeps it from ending a `set -e` script
     private const val STOP =
-        "test -f $DIR/loop.pid && kill \$(cat $DIR/loop.pid) 2>/dev/null; rm -f $DIR/loop.pid; " +
-            "pkill -x pcsc-rs 2>/dev/null; true"
+        "if [ -f $DIR/loop.pid ]; then kill \$(cat $DIR/loop.pid) 2>/dev/null || true; fi; " +
+            "rm -f $DIR/loop.pid; pkill -x pcsc-rs 2>/dev/null || true"
 
     /** Writes `text` to `path` through a quoted here-document, so nothing in it is expanded. */
     private fun write(path: String, text: String): String {
@@ -50,8 +56,15 @@ done
         val version = BuildConfig.VERSION_CODE
         val script = listOf(
             "set -e",
+            // The here-documents below need a writable TMPDIR, which su does not set
+            "export TMPDIR=/data/local/tmp",
             // Shizuku's process has umask 0; only the shell user (and root) may write here
             "umask 022",
+            // Left by an older version run through Shizuku started by root
+            "if [ \"\$(id -u)\" != 0 ] && [ -d $DIR ] && [ ! -w $DIR ]; then",
+            "  echo '$DIR belongs to root (left by an older version). Start once with root or Shizuku started by root to fix it.'",
+            "  exit 1",
+            "fi",
             "mkdir -p $DIR",
             "chmod 755 $DIR",
             "cd $DIR",
@@ -67,7 +80,20 @@ done
             write("loop.sh", LOOP),
             "chmod 600 .env",
             "chmod 755 pcsc-rs loop.sh",
-            "(setsid ./loop.sh > pcsc-rs.log 2>&1 < /dev/null &)",
+            // A fresh log, owned by whoever runs the loop
+            "rm -f pcsc-rs.log",
+            "touch pcsc-rs.log",
+            // With root (root mode, or Shizuku started by root), the files are the shell user's
+            // and the loop runs as the shell user, with adb's groups: the APK's copy of the
+            // client (which the shell user cannot change) switches and starts it. Every way
+            // can then update, stop and start the same client.
+            "if [ \"\$(id -u)\" = 0 ]; then",
+            "  chown -R 2000:2000 $DIR",
+            "  rm -f /data/local/tmp/pcsc-rs-ca.pem",
+            "  (setsid '${bundled(context)}' --as-shell-user /system/bin/sh ./loop.sh >> pcsc-rs.log 2>&1 < /dev/null &)",
+            "else",
+            "  (setsid ./loop.sh >> pcsc-rs.log 2>&1 < /dev/null &)",
+            "fi",
             "echo started",
         ).joinToString("\n")
         return shell.run(script)
@@ -84,11 +110,19 @@ done
     )
 
     suspend fun status(shell: PrivilegedShell, lines: Int = 40): Status? {
+        // The client, or the loop around it: between two runs of the client (5 seconds), or where
+        // the client's process has another name (Waydroid runs it through houdini64), the loop
+        // is still there to stop
         val result = shell.run(
-            "echo \"pids: \$(pidof pcsc-rs)\"; echo ---; tail -n $lines $DIR/pcsc-rs.log 2>/dev/null; true",
+            "echo \"pids: \$(pidof pcsc-rs)\"; " +
+                "l=\$(cat $DIR/loop.pid 2>/dev/null); " +
+                "if [ -n \"\$l\" ] && grep -q loop.sh /proc/\$l/cmdline 2>/dev/null; then echo \"loop: \$l\"; fi; " +
+                "echo ---; tail -n $lines $DIR/pcsc-rs.log 2>/dev/null; true",
         )
         if (!result.ok) return null
-        val pids = result.output.lineSequence().first().removePrefix("pids:").trim()
+        val head = result.output.substringBefore("---\n").lines()
+        val pids = head.first().removePrefix("pids:").trim()
+        val loop = head.any { it.startsWith("loop:") }
         val log = result.output.substringAfter("---\n", "")
         val logLines = log.lines()
         val version = logLines.lastOrNull { it.startsWith("Checking current version... ") }
@@ -99,7 +133,7 @@ done
                 it.startsWith("Disconnected")
         }
         return Status(
-            running = pids.isNotEmpty(),
+            running = pids.isNotEmpty() || loop,
             version = version,
             connected = lastEvent?.let { it.startsWith("Received hi") },
             log = log,
