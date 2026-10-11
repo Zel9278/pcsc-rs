@@ -138,6 +138,64 @@ function Invoke-Remote([string]$RemoteCommand) {
 
 }
 
+function Start-RemoteDetached([string]$RemoteCommand) {
+
+    # Android 5.0's adbd may keep `adb shell` open while a background child exists.
+
+    # Run adb in a job, wait until the remote process has started, then close only
+
+    # the host-side adb connection. nohup keeps the remote process alive.
+
+    $job = Start-Job -ScriptBlock {
+
+        param($AdbPath, $DeviceArgText, $Command)
+
+        $DeviceArgs = if ($DeviceArgText) { @($DeviceArgText -split "`n") } else { @() }
+
+        & $AdbPath @DeviceArgs shell $Command
+
+    } -ArgumentList @($Adb, ($SerialArgs -join "`n"), $RemoteCommand)
+
+    try {
+
+        $started = $false
+
+        for ($attempt = 0; $attempt -lt 20; $attempt++) {
+
+            Start-Sleep -Milliseconds 250
+
+            $pids = @(Invoke-Remote "cat $Dir/loop.pid 2>/dev/null")
+
+            if ($pids.Count -gt 0 -and $pids[0] -match '^\d+$') {
+
+                $started = $true
+
+                break
+
+            }
+
+            if ($job.State -ne "Running") { break }
+
+        }
+
+        if (-not $started) {
+
+            $jobOutput = @(Receive-Job $job -Keep 2>&1 | ForEach-Object { "$_" }) -join "`n"
+
+            throw "Remote client did not start (loop.pid was not created). $jobOutput"
+
+        }
+
+    } finally {
+
+        if ($job.State -eq "Running") { Stop-Job $job }
+
+        Remove-Job $job -Force -ErrorAction SilentlyContinue
+
+    }
+
+}
+
 # Text piped from PowerShell to a native command gets CRLF line endings, so files are
 
 # written locally with LF and UTF-8 (no BOM) and pushed instead.
@@ -380,7 +438,7 @@ Invoke-Remote "cd $Dir && : > pcsc-rs.log" | Out-Null
 
 # Detach all standard streams; old Android toolbox does not provide setsid.
 
-Invoke-Remote "cd $Dir && (./loop.sh > $Dir/pcsc-rs.log 2>&1 < /dev/null &)" | Out-Null
+Start-RemoteDetached "cd $Dir && nohup ./loop.sh > $Dir/pcsc-rs.log 2>&1 < /dev/null &"
 
 $logLines = @(Get-RemoteLog 8)
 

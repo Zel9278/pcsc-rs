@@ -26,8 +26,9 @@ done
 """
 
     private const val STOP =
-        "test -f $DIR/loop.pid && kill \$(cat $DIR/loop.pid) 2>/dev/null; rm -f $DIR/loop.pid; " +
-            "pkill -x pcsc-rs 2>/dev/null; true"
+        "if [ -f $DIR/loop.pid ]; then kill \$(cat $DIR/loop.pid) 2>/dev/null || true; fi; " +
+            "rm -f $DIR/loop.pid; " +
+            "pkill -x pcsc-rs 2>/dev/null || true"
 
     /** Writes `text` to `path` through a quoted here-document, so nothing in it is expanded. */
     private fun write(path: String, text: String): String {
@@ -48,8 +49,10 @@ done
         // Copy the APK's client only when the APK changed, so a client that updated itself
         // is not replaced by an older one on every start
         val version = BuildConfig.VERSION_CODE
-        val script = listOf(
+          val script = listOf(
             "set -e",
+            // The heredocs below make temporary files; without TMPDIR the shell tries /data/local, which the shell user cannot write
+            "export TMPDIR=/data/local/tmp",
             // Shizuku's process has umask 0; only the shell user (and root) may write here
             "umask 022",
             "mkdir -p $DIR",
