@@ -200,6 +200,13 @@ fn connect(uri: &str) -> tungstenite::Result<Socket> {
         .port_u16()
         .unwrap_or(if tls { 443 } else { 80 });
 
+    #[cfg_attr(
+        not(any(
+            all(target_os = "linux", target_arch = "arm", target_env = "musl"),
+            target_os = "android"
+        )),
+        allow(unused_mut)
+    )]
     let mut addresses = (host.as_str(), port)
         .to_socket_addrs()
         .map(|iter| iter.collect::<Vec<_>>());
