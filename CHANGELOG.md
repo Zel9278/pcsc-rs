@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.1](https://github.com/Zel9278/pcsc-rs/compare/v2.6.0...v2.6.1) (2026-10-11)
+
+
+### Bug Fixes
+
+* **android:** start from a stopped state, look up names in root mode, and keep the client the shell user's ([#681](https://github.com/Zel9278/pcsc-rs/issues/681)) ([e8d76f1](https://github.com/Zel9278/pcsc-rs/commit/e8d76f19a8d37d147cf3eab495c7dd590a42a430))
+
 ## [2.6.0](https://github.com/Zel9278/pcsc-rs/compare/v2.5.0...v2.6.0) (2026-10-09)
 
 
