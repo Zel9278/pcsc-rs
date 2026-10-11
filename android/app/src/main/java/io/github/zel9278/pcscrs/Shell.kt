@@ -33,10 +33,24 @@ interface PrivilegedShell {
  * instead of on every status check.
  */
 object RootShell : PrivilegedShell {
+    /**
+     * The groups adbd gives the shell user. Plain `su 2000` has none of them, and without
+     * inet (3003) the process cannot reach netd's DNS socket (`dnsproxyd`, root:inet 0660):
+     * every name lookup fails although sockets to addresses work.
+     */
+    private val SHELL_GROUPS = listOf(
+        3003, // inet
+        1004, 1007, 1011, 1015, 1028, 1078, 1079, // input, log, adb, sdcard_rw, sdcard_r, ext_data_rw, ext_obb_rw
+        3001, 3002, 3006, 3009, 3011, 3012, // net_bt_admin, net_bt, net_bw_stats, readproc, uhid, readtracefs
+    )
+
     private val lock = Mutex()
     private var process: Process? = null
     private var input: Writer? = null
     private var output: BufferedReader? = null
+
+    /** Cleared when this root manager's su does not take -g / -G (they are newer than su itself) */
+    private var withGroups = true
 
     override suspend fun run(command: String): ShellResult = withContext(Dispatchers.IO) {
         lock.withLock {
@@ -51,7 +65,13 @@ object RootShell : PrivilegedShell {
     }
 
     private fun exchange(command: String): ShellResult {
-        val (stdin, stdout) = open()
+        open()
+        return send(command)
+    }
+
+    private fun send(command: String): ShellResult {
+        val stdin = input!!
+        val stdout = output!!
         val marker = "__PCSC_END_${UUID.randomUUID()}__"
         // In a subshell, so `exit` or `cd` in the command do not end or move the shell
         stdin.write("(\n$command\n) 2>&1 </dev/null\n__pcsc_rc=\$?\necho\necho \"$marker \$__pcsc_rc\"\n")
@@ -71,17 +91,34 @@ object RootShell : PrivilegedShell {
         }
     }
 
-    private fun open(): Pair<Writer, BufferedReader> {
-        val running = process?.takeIf { it.alive() }
-        if (running != null) return input!! to output!!
-        // As the shell user (uid 2000), like adb and Shizuku: the client never runs as root, its
-        // files stay the shell user's (nothing a shell process can plant is run as root), and
-        // switching to wireless debugging or Shizuku later can still stop it
-        val started = ProcessBuilder("su", "2000").redirectErrorStream(true).start()
+    /**
+     * As the shell user (uid 2000) with its groups, like adb and Shizuku: the client never runs
+     * as root, its files stay the shell user's (nothing a shell process can plant is run as
+     * root), and switching to wireless debugging or Shizuku later can still stop it.
+     */
+    private fun open() {
+        if (process?.alive() == true) return
+        if (withGroups) {
+            // Options before the user: su stops reading options there (Magisk, KernelSU)
+            start(listOf("su", "-g", "2000") + SHELL_GROUPS.flatMap { listOf("-G", "$it") } + "2000")
+            val id = try {
+                send("id -u")
+            } catch (_: IOException) {
+                null
+            }
+            if (id?.ok == true && id.output.trim() == "2000") return
+            // An older su that rejects -g / -G: plain su 2000, which cannot look up names
+            close()
+            withGroups = false
+        }
+        start(listOf("su", "2000"))
+    }
+
+    private fun start(command: List<String>) {
+        val started = ProcessBuilder(command).redirectErrorStream(true).start()
         process = started
         input = started.outputStream.bufferedWriter()
         output = started.inputStream.bufferedReader()
-        return input!! to output!!
     }
 
     private fun close() {

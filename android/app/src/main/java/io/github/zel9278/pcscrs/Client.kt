@@ -19,15 +19,19 @@ cd "${'$'}(dirname "${'$'}0")" || exit 1
 echo ${'$'}${'$'} > loop.pid
 # The name comes from .env (or the device model), not the shell's HOSTNAME
 unset HOSTNAME
+# su 2000 starts without TMPDIR (or with the app's, which the shell user cannot write);
+# the client keeps its CA bundle there
+export TMPDIR=/data/local/tmp
 while true; do
   ./pcsc-rs
   sleep 5
 done
 """
 
+    // Each step may find nothing to stop; `|| true` keeps it from ending a `set -e` script
     private const val STOP =
-        "test -f $DIR/loop.pid && kill \$(cat $DIR/loop.pid) 2>/dev/null; rm -f $DIR/loop.pid; " +
-            "pkill -x pcsc-rs 2>/dev/null; true"
+        "if [ -f $DIR/loop.pid ]; then kill \$(cat $DIR/loop.pid) 2>/dev/null || true; fi; " +
+            "rm -f $DIR/loop.pid; pkill -x pcsc-rs 2>/dev/null || true"
 
     /** Writes `text` to `path` through a quoted here-document, so nothing in it is expanded. */
     private fun write(path: String, text: String): String {
@@ -50,6 +54,8 @@ done
         val version = BuildConfig.VERSION_CODE
         val script = listOf(
             "set -e",
+            // The here-documents below need a writable TMPDIR, which su 2000 does not set
+            "export TMPDIR=/data/local/tmp",
             // Shizuku's process has umask 0; only the shell user (and root) may write here
             "umask 022",
             "mkdir -p $DIR",
