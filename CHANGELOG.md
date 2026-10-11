@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.8](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.9.7...v0.9.8) (2026-10-11)
+
+
+### Bug Fixes
+
+* NixOS name ([9dc18d4](https://github.com/SHINTRANET-Lab/pcsc-rs/commit/9dc18d4a3858f956c6f1817c74c7b65250a9e703))
+
 ## [0.9.7](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.9.6...v0.9.7) (2026-10-11)
 
 
