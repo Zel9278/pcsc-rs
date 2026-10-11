@@ -5,10 +5,16 @@
 #   scripts/android-adb.sh install                2回目以降は、入っている PASS のまま入れ直す
 #   scripts/android-adb.sh install --binary <file> 手元でビルドしたものを入れる
 #   scripts/android-adb.sh install --hostname <名前> PC Status に出す名前（既定は機種名。例: SH-M28）
+#   scripts/android-adb.sh install --libc bionic  32bit ARM で Android 5.0 以降なら Android 標準の DNS を使う版を入れる
 #   scripts/android-adb.sh stop | status | log [行数]
 #   scripts/android-adb.sh devices                つながっている端末とシリアルの一覧
 #   … --adb <adb の場所>（または環境変数 ADB）で、PATH に無い adb を使う
 #   … --serial <シリアル>（または ANDROID_SERIAL）で端末を選ぶ。USB でも、無線デバッグの IP:ポートでもよい
+#
+# --libc は auto（既定）、bionic、musl から選ぶ。
+#   auto   : 64bit ARM は bionic 版、32bit ARM は musl 版（従来どおり）
+#   bionic : Android 5.0（API 21）以降用。musl 版が /etc/resolv.conf を探して名前解決に失敗する端末向け
+#   musl   : 静的ビルド。Android 2.3.3 以降の 32bit ARM で使える
 #
 # adb shell の権限で動くので、CPU（コアごと）・GPU（Adreno）・ロードアベレージも取れる。
 # 端末から切り離して動かすので、ケーブルを抜いても・画面を消して Doze に入っても止まらない。
@@ -18,10 +24,10 @@
 set -eu
 
 DIR=/data/local/tmp/pcsc-rs
-# 64bit ARMはAndroid 5.0+ API 21ビルド、32bit ARMはAndroid 2.3.3+用の静的muslビルドを使う。
 command=install
 binary=
 hostname=
+libc=auto
 lines=30
 adb_bin=${ADB:-adb}
 serial=${ANDROID_SERIAL:-}
@@ -30,15 +36,21 @@ while [ $# -gt 0 ]; do
     install | stop | status | log | devices) command=$1; shift ;;
     --binary) binary=${2:?--binary にファイルを指定して}; shift 2 ;;
     --hostname) hostname=${2:?--hostname に名前を指定して}; shift 2 ;;
+    --libc) libc=${2:?--libc に auto、bionic、musl のどれかを指定して}; shift 2 ;;
     --adb) adb_bin=${2:?--adb に adb の場所を指定して}; shift 2 ;;
     --serial | -s) serial=${2:?--serial にシリアルを指定して}; shift 2 ;;
     [0-9]*) lines=$1; shift ;;
     *)
-      echo "使い方: $0 [install [--binary <file>] [--hostname <名前>] | stop | status | log [行数] | devices] [--serial <シリアル>] [--adb <adb の場所>]" >&2
+      echo "使い方: $0 [install [--binary <file>] [--hostname <名前>] [--libc auto|bionic|musl] | stop | status | log [行数] | devices] [--serial <シリアル>] [--adb <adb の場所>]" >&2
       exit 1
       ;;
   esac
 done
+
+case "$libc" in
+  auto | bionic | musl) ;;
+  *) echo "--libc は auto、bionic、musl のどれかを指定して（指定された値: $libc）" >&2; exit 1 ;;
+esac
 
 if ! command -v "$adb_bin" >/dev/null 2>&1; then
   echo "adb が見つからない: $adb_bin（--adb か環境変数 ADB で場所を指定して）" >&2
@@ -86,6 +98,11 @@ stop_remote() {
   adb shell "for pidfile in $DIR/loop.pid $DIR/client.pid; do if test -f \$pidfile; then pid=\$(cat \$pidfile 2>/dev/null); case \$pid in ''|*[!0-9]*) ;; *) kill -9 \$pid 2>/dev/null ;; esac; rm \$pidfile 2>/dev/null || true; fi; done; ps | while read user pid ppid vsize rss wchan pc state name; do case \$name in pcsc-rs|*/pcsc-rs) kill -9 \$pid 2>/dev/null ;; esac; done; true"
 }
 
+# ログの末尾。Android 2.3 の toolbox には tail が無いことがあるので、PC 側で切る
+remote_log() {
+  adb shell "cat $DIR/pcsc-rs.log 2>/dev/null" | tr -d '\r' | tail -n "$1"
+}
+
 case "$command" in
   install)
 
@@ -93,14 +110,21 @@ case "$command" in
     [ -n "$abi" ] || abi=$(adb shell uname -m | tr -d '\r')
     case "$abi" in
       aarch64 | arm64-v8a)
-        # Android 5.0+ arm64 uses the API 21 Android build.
+        # Android 5.0+ の arm64 には Android 標準（bionic）の API 21 ビルドしか無い
+        [ "$libc" != musl ] || { echo "arm64 に musl 版は無い。--libc bionic か auto を使って" >&2; exit 1; }
         targets="aarch64-linux-android"
         ;;
       armv7l | armeabi-v7a)
-        # Android 2.3.3+ 32-bit ARM uses a static musl build.
-        targets="armv7-unknown-linux-musleabi"
+        if [ "$libc" = bionic ]; then
+          # Android 5.0（API 21）以降が必要
+          targets="armv7-linux-androideabi"
+        else
+          # Android 2.3.3+ の 32bit ARM は静的 musl ビルドを使う
+          targets="armv7-unknown-linux-musleabi"
+        fi
         ;;
       armv6l | armeabi | arm)
+        [ "$libc" != bionic ] || { echo "armeabi に bionic 版は無い。--libc musl か auto を使って" >&2; exit 1; }
         targets="arm-unknown-linux-musleabi"
         ;;
       *)
@@ -128,7 +152,7 @@ case "$command" in
         rm -f "$tmp/pcsc-rs"
         [ "$code" = 404 ] || { echo "ダウンロードに失敗した（$target: HTTP $code）" >&2; exit 1; }
       done
-      [ -f "$tmp/pcsc-rs" ] || { echo "$tag に $abi 向けのファイルが無い" >&2; exit 1; }
+      [ -f "$tmp/pcsc-rs" ] || { echo "$tag に $targets のファイルが無い（$abi 向け）" >&2; exit 1; }
       binary=$tmp/pcsc-rs
     fi
 
@@ -154,25 +178,59 @@ case "$command" in
     stop_remote
     adb push "$binary" "$DIR/pcsc-rs" >/dev/null
     adb shell "chmod 755 $DIR/pcsc-rs"
+    # 古い起動の跡を消してから、起動用のスクリプトを書く
+    adb shell "rm -f $DIR/loop.sh $DIR/loop.pid $DIR/client.pid"
     # 本体が終わったら（落ちた・更新した）5 秒後に起動し直す。.env は作業フォルダから読まれる
-    adb shell "cat > $DIR/loop.sh" <<'LOOP'
+    adb shell "cat > $DIR/loop.sh" <<LOOP
 #!/system/bin/sh
-cd "$(dirname "$0")" || exit 1
-echo $$ > loop.pid
+cd $DIR || exit 1
+echo \$\$ > loop.pid
 # adb shell は HOSTNAME に機種のコード名を入れてくる。.env の名前（無ければ機種名）を使わせる
 unset HOSTNAME
 while true; do
   ./pcsc-rs &
-  client_pid=$!
-  echo $client_pid > client.pid
-  wait $client_pid
-  rm client.pid 2>/dev/null || true
+  client_pid=\$!
+  echo \$client_pid > client.pid
+  wait \$client_pid
+  rm -f client.pid
   sleep 5
 done
 LOOP
     adb shell "chmod 755 $DIR/loop.sh"
-    # すべての入出力を切り離して起動し、古いAndroid toolboxにないsetsidは使わない
-    adb shell "cd $DIR && ($DIR/loop.sh > pcsc-rs.log 2>&1 < /dev/null &)"
+    # 今回の出力だけで接続を確かめられるよう、古いログを空にする
+    adb shell "cd $DIR && : > pcsc-rs.log"
+
+    # すべての入出力を切り離して起動する。古い Android の toolbox には setsid が無く、
+    # nohup も無いことがある（Android 4.x のシェルは nohup を別名として持つので type では調べられない）。
+    start_cmd="cd $DIR && if [ -x /system/bin/nohup ] || [ -x /system/xbin/nohup ]; then nohup ./loop.sh > $DIR/pcsc-rs.log 2>&1 < /dev/null & else ./loop.sh > $DIR/pcsc-rs.log 2>&1 < /dev/null & fi"
+    # Android 5.0 の adbd は、背景の子プロセスがいる間 adb shell を終わらせないことがある。
+    # adb を背景で動かし、loop.pid ができたのを確かめてから、PC 側の adb だけを閉じる
+    if [ -n "$serial" ]; then
+      command "$adb_bin" -s "$serial" shell "$start_cmd" > "$tmp/start.out" 2>&1 < /dev/null &
+    else
+      command "$adb_bin" shell "$start_cmd" > "$tmp/start.out" 2>&1 < /dev/null &
+    fi
+    start_pid=$!
+    started=0
+    i=0
+    while [ $i -lt 10 ]; do
+      sleep 1
+      i=$((i + 1))
+      loop_pid=$(adb shell "cat $DIR/loop.pid 2>/dev/null; true" | tr -d '\r')
+      case "$loop_pid" in
+        '' | *[!0-9]*) ;;
+        *) started=1; break ;;
+      esac
+    done
+    kill "$start_pid" 2>/dev/null || true
+    wait "$start_pid" 2>/dev/null || true
+    if [ "$started" -ne 1 ]; then
+      echo "起動できなかった（loop.pid ができなかった）" >&2
+      cat "$tmp/start.out" >&2 || true
+      remote_log 20 >&2 || true
+      exit 1
+    fi
+
     # つながるか、失敗か、断られるまで待つ（更新の確認に時間がかかる端末もあるので最大 20 秒）
     i=0
     while [ $i -lt 20 ]; do
@@ -180,16 +238,21 @@ LOOP
       i=$((i + 1))
       adb shell "cat $DIR/pcsc-rs.log 2>/dev/null" | grep -qE 'Received hi|Connection failed|refused' && break
     done
-    adb shell "tail -n 8 $DIR/pcsc-rs.log"
+    remote_log 8
     ;;
   stop)
     stop_remote
     echo "止めた"
     ;;
   status)
-    adb shell "ps | while read user pid ppid vsize rss wchan pc state name; do case \$name in pcsc-rs|*/pcsc-rs) echo \$user \$pid \$ppid \$vsize \$rss \$wchan \$pc \$state \$name ;; esac; done" || echo "動いていない"
+    ps_out=$(adb shell "ps | while read user pid ppid vsize rss wchan pc state name; do case \$name in pcsc-rs|*/pcsc-rs) echo \$user \$pid \$ppid \$vsize \$rss \$wchan \$pc \$state \$name ;; esac; done" | tr -d '\r') || true
+    if [ -n "$ps_out" ]; then
+      printf '%s\n' "$ps_out"
+    else
+      echo "動いていない"
+    fi
     ;;
   log)
-    adb shell "tail -n $lines $DIR/pcsc-rs.log"
+    remote_log "$lines"
     ;;
 esac
