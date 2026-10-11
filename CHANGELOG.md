@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.3](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.9.2...v0.9.3) (2026-10-11)
+
+
+### Bug Fixes
+
+* stop legacy Android client reliably ([31fe348](https://github.com/SHINTRANET-Lab/pcsc-rs/commit/31fe3485b96caa2d6cb22b1e5547e08062873033))
+* support N-07D toolbox stop commands ([279c11a](https://github.com/SHINTRANET-Lab/pcsc-rs/commit/279c11a79bf202df152755c9bff47207725fdaab))
+
 ## [2.6.0](https://github.com/Zel9278/pcsc-rs/compare/v2.5.0...v2.6.0) (2026-10-09)
 
 
