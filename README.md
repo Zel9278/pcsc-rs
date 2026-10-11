@@ -251,7 +251,7 @@ $env:PASS = "<PASS>"; .\scripts\android-adb.ps1 install -Hostname 表示した�
   `.\scripts\build-android-local.ps1 arm32`、両方のAPKまで作る場合は
   `.\scripts\build-android-local.ps1 apk`を実行します。PowerShell版のARM32/APKビルドには
   WSL（Rustと`cross`を導入済み）およびDocker DesktopのWSL統合が必要です。
-  既定のディストリビューションは`Lavuntu`です。別のディストリビューションを使う場合は
+  既定のディストリビューションは`ubuntu`です。別のディストリビューションを使う場合は
   `-WslDistribution Ubuntu`のように指定してください。ビルドはDocker内のARM用GCCが
   並列時に不安定な古い環境にも対応するため、既定で1ジョブずつ実行します。
   ARMv7のbionic版は、NDKだけで作れます（WSLとDockerは要りません）。

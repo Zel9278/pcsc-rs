@@ -14,10 +14,10 @@ repo_root="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 build_kind="${1:-android64}"
 compile_sdk="${ANDROID_COMPILE_SDK:-37}"
 
-if [ "${HOME:-}" != /* ]; then
-  HOME="$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f6 || true)"
-  export HOME
-fi
+case "${HOME:-}" in
+  /*) ;;
+  *) HOME="$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f6 || true)"; export HOME ;;
+esac
 if [ -d "$HOME/.cargo-lavuntu/bin" ]; then
   export CARGO_HOME="$HOME/.cargo-lavuntu"
   export RUSTUP_HOME="$HOME/.rustup-lavuntu"

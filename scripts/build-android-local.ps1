@@ -136,21 +136,8 @@ function Build-Arm32 {
     if ($LASTEXITCODE -ne 0 -or -not $wslRoot) {
         throw "Could not resolve the repository path in WSL distribution '$WslDistribution'."
     }
-
-    $wslCommand = 'export HOME=$(getent passwd "$(id -un)" | cut -d: -f6); ' +
-        'export CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"; ' +
-        'export RUSTUP_HOME="${RUSTUP_HOME:-$HOME/.rustup}"; ' +
-        'if [ -d "$HOME/.cargo-lavuntu/bin" ]; then ' +
-        'export CARGO_HOME="$HOME/.cargo-lavuntu"; ' +
-        'export RUSTUP_HOME="$HOME/.rustup-lavuntu"; fi; ' +
-        'export PATH="$CARGO_HOME/bin:$HOME/.cargo/bin:$PATH"; ' +
-        'export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-1}"; ' +
-        'command -v cargo >/dev/null 2>&1 || { echo "cargo is missing in WSL" >&2; exit 127; }; ' +
-        'command -v cross >/dev/null 2>&1 || { echo "cross is missing in WSL" >&2; exit 127; }; ' +
-        'command -v docker >/dev/null 2>&1 || { echo "Docker is missing in WSL" >&2; exit 127; }; ' +
-        'docker info >/dev/null 2>&1 || { echo "Docker Desktop WSL integration is unavailable" >&2; exit 125; }; ' +
-        'cd "' + $wslRoot + '"; bash scripts/build-android-local.sh arm32'
-    Invoke-External "wsl.exe" @("-d", $WslDistribution, "--", "bash", "-lc", $wslCommand)
+    $wslScript = $wslRoot.TrimEnd("/") + "/scripts/build-android-local.sh"
+    Invoke-External "wsl.exe" @("-d", $WslDistribution, "--", "bash", $wslScript, "arm32")
 }
 
 function Prepare-ApkAssets {
@@ -189,8 +176,9 @@ switch ($BuildKind) {
         Build-Arm32
     }
     "all" {
-        Add-AndroidTarget
+        Add-AndroidTarget @("aarch64-linux-android", "armv7-linux-androideabi")
         Build-Android64
+        Build-Armv7Android
         Build-Arm32
     }
     "apk" {
