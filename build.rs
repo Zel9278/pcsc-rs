@@ -54,8 +54,8 @@ fn arch_label(target: &str) -> &'static str {
         "x86_64-unknown-linux-musl" => "x86_64 musl",
         "aarch64-apple-darwin" => "macOS ARM64",
         "x86_64-apple-darwin" => "macOS x86_64",
-        "x86_64-pc-windows-msvc" => "Windows x64",
-        "i686-pc-windows-msvc" => "Windows x86",
+        "x86_64-pc-windows-msvc" => "Windows x86_64",
+        "i686-pc-windows-msvc" => "Windows i686",
         _ => "",
     }
 }
