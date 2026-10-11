@@ -9,7 +9,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet("android64", "arm32", "all", "apk")]
+    [ValidateSet("android64", "armv7", "arm32", "all", "apk")]
     [string]$BuildKind = "android64",
     [int]$CompileSdk = 0,
     [string]$WslDistribution = "Lavuntu"
@@ -54,9 +54,11 @@ function Get-NdkRoot {
     return $null
 }
 
-function Add-AndroidTarget {
+function Add-AndroidTarget([string[]]$Targets = @("aarch64-linux-android")) {
     Require-Command "rustup" "Install Rust with rustup and make it available on PATH."
-    Invoke-External "rustup" @("target", "add", "aarch64-linux-android")
+    foreach ($t in $Targets) {
+        Invoke-External "rustup" @("target", "add", $t)
+    }
 }
 
 function Build-Android64 {
@@ -86,6 +88,40 @@ function Build-Android64 {
     try {
         Invoke-External "cargo" @(
             "build", "--locked", "--release", "--target", "aarch64-linux-android",
+            "--no-default-features", "--features", "android-legacy"
+        )
+    } finally {
+        Pop-Location
+    }
+}
+
+function Build-Armv7Android {
+    $ndkRoot = [string](Get-NdkRoot)
+    if (-not $ndkRoot) {
+        throw "Android NDK was not found. Set ANDROID_NDK_ROOT or ANDROID_SDK_ROOT and install an NDK."
+    }
+
+    $ndkBin = Join-Path -Path $ndkRoot.Trim() -ChildPath "toolchains\llvm\prebuilt\windows-x86_64\bin"
+    if (-not (Test-Path -LiteralPath $ndkBin -PathType Container)) {
+        throw "Windows NDK toolchain was not found: $ndkBin"
+    }
+
+    $linker = Join-Path $ndkBin "armv7a-linux-androideabi21-clang.cmd"
+    if (-not (Test-Path -LiteralPath $linker -PathType Leaf)) {
+        $linker = Join-Path $ndkBin "armv7a-linux-androideabi21-clang.exe"
+    }
+    if (-not (Test-Path -LiteralPath $linker -PathType Leaf)) {
+        throw "Android API 21 armv7a linker was not found in $ndkBin"
+    }
+
+    $env:CC_armv7_linux_androideabi = $linker
+    $env:AR_armv7_linux_androideabi = Join-Path $ndkBin "llvm-ar.exe"
+    $env:CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER = $linker
+
+    Push-Location $RepoRoot
+    try {
+        Invoke-External "cargo" @(
+            "build", "--locked", "--release", "--target", "armv7-linux-androideabi",
             "--no-default-features", "--features", "android-legacy"
         )
     } finally {
@@ -144,6 +180,10 @@ switch ($BuildKind) {
     "android64" {
         Add-AndroidTarget
         Build-Android64
+    }
+    "armv7" {
+    Add-AndroidTarget @("armv7-linux-androideabi")
+    Build-Armv7Android
     }
     "arm32" {
         Build-Arm32
