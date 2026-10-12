@@ -1,7 +1,9 @@
-# PC Status Client - Rust
+# mimizk-rs
+PC の状態を取得し、 [PC Status](https://pc-stats.eov2.com/) に送信、表示するツールです。
 
-PC の状態を取得し、[PC Status](https://pc-stats.eov2.com/)に送信、表示するツールです。
+fork 元では対応していない Android 7 以前の ARMv6/v7 Android や ARMv6 Linux に対応しています。
 
+###
 ![Preview - Overview](docs/images/overview.png)
 | ![Preview - Focus to DMS-Arch](docs/images/focus-dms.png) | ![Preview - Focus to ZPC-Fedora](docs/images/focus-zpc.png) |
 |---|---|
@@ -33,7 +35,7 @@ HOSTNAME=ホスト名として表示させたい文字列
 
 ## 対応環境
 
-最近の Windows (Server 含む), macOS, Linux であれば動作すると思います。Windows XP などの古い Windows では、32 ビット版 (`pcsc-rs-…-i686-pc-windows-msvc.exe`) を[手動で入れて](#windows)ください。\
+最近の Windows (Server 含む), macOS, Linux であれば動作すると思います。Windows XP などの古い Windows では、32 ビット版 (`mimizk-rs-…-i686-pc-windows-msvc.exe`) を[手動で入れて](#windows)ください。\
 もし動作しない場合は [Issues](https://github.com/SHINTRANET-Lab/pcsc-rs/issues) から報告をお願いします。
 
 ## 使い方
