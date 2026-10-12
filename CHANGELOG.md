@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.10](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.9.9...v0.9.10) (2026-10-12)
+
+
+### Bug Fixes
+
+* legacy apk ([79b2c62](https://github.com/SHINTRANET-Lab/pcsc-rs/commit/79b2c627a4abdb7b88a9c719b7ec1316caf33987))
+
 ## [0.9.9](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.9.8...v0.9.9) (2026-10-12)
 Android apkが配布されるようになりました
 ほぼ全てのビルドで自動更新ができるようになりました(試験的)
