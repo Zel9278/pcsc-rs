@@ -57,9 +57,12 @@ pub fn cpu_model() -> Option<String> {
             // 3. 結合した文字列（platform_combined）でSoC名からKrait世代を判定
             let soc_model = if platform_combined.contains("apq8084") {
                 Some("Krait 450")
-            } else if platform_combined.contains("msm8974") || platform_combined.contains("apq8074") {
+            } else if platform_combined.contains("msm8974") || platform_combined.contains("apq8074")
+            {
                 Some("Krait 400")
-            } else if platform_combined.contains("apq8064t") || platform_combined.contains("msm8960t") {
+            } else if platform_combined.contains("apq8064t")
+                || platform_combined.contains("msm8960t")
+            {
                 Some("Krait 300")
             } else if platform_combined.contains("apq8064") {
                 Some("Krait 300")
