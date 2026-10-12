@@ -151,11 +151,16 @@ mod mobile {
 
     const KGSL: &str = "/sys/class/kgsl/kgsl-3d0";
     const SAMSUNG: &str = "/sys/kernel/gpu";
+
     /// `dumpsys` takes a few tens of milliseconds; once in a while is enough
     const MEMORY_INTERVAL: Duration = Duration::from_secs(5);
 
     pub fn get_info() -> Option<GpuData> {
-        let (name, usage) = adreno().or_else(samsung)?;
+        let (name, usage) = adreno()
+            .or_else(samsung)
+            .or_else(mediatek_mali)
+            .or_else(generic_mali)
+            .or_else(powervr)?;
         Some(GpuData {
             name,
             usage,
@@ -183,15 +188,43 @@ mod mobile {
         let model = fs::read_to_string(format!("{SAMSUNG}/gpu_model")).unwrap_or_default();
         let model = model.trim();
         Some((
+            // 変更前: if model.is_empty() { "GPU".into() } else { model.into() }
+            // 変更後:
             if model.is_empty() {
-                "GPU".into()
+                "Samsung".into()
             } else {
                 model.into()
             },
             percent(&busy)?,
         ))
     }
+    fn mediatek_mali() -> Option<(String, f64)> {
+        let busy = fs::read_to_string("/sys/kernel/ged/hal/total_gpu_utilization").ok()?;
+        Some((
+            "MediaTek".into(),
+            busy.trim().parse::<f64>().ok()?.clamp(0.0, 100.0),
+        ))
+    }
+    fn generic_mali() -> Option<(String, f64)> {
+        let raw_val = fs::read_to_string("/sys/class/misc/mali0/device/utilization")
+            .or_else(|_| fs::read_to_string("/sys/devices/platform/mali.0/utilization"))
+            .ok()?;
 
+        let val = raw_val.trim().parse::<f64>().ok()?;
+        // ドライバーによっては 0-255 で出力されるため、100を超える場合は255で割る
+        let usage = if val > 100.0 {
+            (val / 255.0) * 100.0
+        } else {
+            val
+        };
+        Some(("Arm Mali".into(), usage.clamp(0.0, 100.0)))
+    }
+    fn powervr() -> Option<(String, f64)> {
+        if let Ok(busy) = fs::read_to_string("/sys/class/misc/pvr/load") {
+            return Some(("PowerVR".into(), percent(&busy)?));
+        }
+        None
+    }
     /// The first number in the text as a percentage: `12 %`, `12%`, `12`.
     pub(super) fn percent(text: &str) -> Option<f64> {
         let start = text.find(|c: char| c.is_ascii_digit())?;

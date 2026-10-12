@@ -33,16 +33,48 @@ pub fn cpu_model() -> Option<String> {
     static MODEL: OnceLock<Option<String>> = OnceLock::new();
     MODEL
         .get_or_init(|| {
+            // 1. 各種情報の取得
             let platform = getprop("ro.board.platform")
                 .unwrap_or_default()
                 .to_ascii_lowercase();
-            let soc_model = if platform.starts_with("msm8974") || platform.starts_with("apq8074") {
+
+            let cpuinfo = fs::read_to_string("/proc/cpuinfo").unwrap_or_default();
+            let cpuinfo_lower = cpuinfo.to_ascii_lowercase();
+
+            let hardware = cpuinfo_lower
+                .lines()
+                .find(|line| line.starts_with("hardware"))
+                .unwrap_or("");
+
+            // 2. プロパティとHardware行を結合して判定用文字列を作成（N-07DのQCT対策）
+            let platform_combined = format!("{} {}", platform, hardware);
+
+            let is_msm7x30 = platform == "msm7k"
+                && fs::read_to_string("/sys/devices/system/soc/soc0/build_id")
+                    .map(|id| id.trim().to_ascii_uppercase().starts_with("7X30"))
+                    .unwrap_or(false);
+
+            // 3. 結合した文字列（platform_combined）でSoC名からKrait世代を判定
+            let soc_model = if platform_combined.contains("apq8084") {
+                Some("Krait 450")
+            } else if platform_combined.contains("msm8974") || platform_combined.contains("apq8074") {
                 Some("Krait 400")
-            } else if platform.starts_with("msm8960") || platform.starts_with("msm8930") {
-                Some("Krait")
+            } else if platform_combined.contains("apq8064t") || platform_combined.contains("msm8960t") {
+                Some("Krait 300")
+            } else if platform_combined.contains("apq8064") {
+                Some("Krait 300")
+            } else if platform_combined.contains("msm8960")
+                || platform_combined.contains("msm8930")
+                || platform_combined.contains("apq8060a")
+            {
+                Some("Krait 200")
+            } else if is_msm7x30 {
+                Some("Scorpion")
             } else {
                 None
             };
+
+            // 4. 文字列で全滅した場合は、既存の cpu_part_model()（物理レジスタ値判定）へフォールバック（F-05F対策）
             soc_model.map(str::to_owned).or_else(|| cpu_part_model())
         })
         .clone()
