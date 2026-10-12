@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.11](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.9.10...v0.9.11) (2026-10-12)
+
+
+### Bug Fixes
+
+* CPU GPU ([d5d348c](https://github.com/SHINTRANET-Lab/pcsc-rs/commit/d5d348c9f93e5e5c8195482a9c2727ae7f04c2a4))
+
 ## [0.9.10](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.9.9...v0.9.10) (2026-10-12)
 
 
