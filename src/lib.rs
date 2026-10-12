@@ -60,10 +60,8 @@ pub fn start(config: &Config) -> ! {
     ))]
     android::prepare_tls();
 
-
-        update::check(config.on_update);
-        update::spawn_periodic(config.on_update);
-
+    update::check(config.on_update);
+    update::spawn_periodic(config.on_update);
 
     let hostname = config.hostname.clone();
     #[cfg(any(target_os = "linux", target_os = "android"))]
