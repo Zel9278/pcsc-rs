@@ -1,7 +1,8 @@
 # Changelog
 
 ## [0.9.9](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.9.8...v0.9.9) (2026-10-12)
-
+Android apkが配布されるようになりました
+ほぼ全てのビルドで自動更新ができるようになりました(試験的)
 
 ### Bug Fixes
 
