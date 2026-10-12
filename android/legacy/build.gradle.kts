@@ -19,7 +19,17 @@ android {
         versionCode = major * 1_000_000 + minor * 1_000 + patch
         versionName = cargoVersion
     }
-
+    val keystore = System.getenv("ANDROID_KEYSTORE")
+    signingConfigs {
+        if (keystore != null) {
+            create("release") {
+                storeFile = file(keystore)
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         release {
             isMinifyEnabled = false
