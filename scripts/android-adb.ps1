@@ -365,6 +365,7 @@ switch ($Command) {
 
             if ($Hostname) { $envText += "HOSTNAME='$Hostname'`n" }
 
+            $envText += "PCSC_UPDATED=terminate`n"
             # Keep the other settings (PCSC_URI, DEV_MODE, ...)
 
             foreach ($line in $oldEnv) {
@@ -388,6 +389,8 @@ switch ($Command) {
 $loopScript = @'
 
 #!/system/bin/sh
+
+export TMPDIR=/data/local/tmp/pcsc-rs
 
 cd /data/local/tmp/pcsc-rs || exit 1
 

@@ -57,6 +57,8 @@ xp = [
 android-legacy = [
     "dep:rustls",
     "tungstenite/rustls-tls-webpki-roots",
+    "self_update/ureq",
+    "self_update/rustls",
 ]
 
 [build-dependencies]

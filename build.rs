@@ -13,7 +13,7 @@ fn main() -> io::Result<()> {
         format!(" {label}")
     };
     println!("cargo::rustc-env=PCSC_ARCH_SUFFIX={suffix}");
-
+    println!("cargo::rustc-env=PCSC_TARGET={target}");
     match get_git_describe_result() {
         Ok(result) => println!("cargo::rustc-env=GIT_DESCRIBE={result}"),
         Err(e) => println!("cargo::warning={e}"),

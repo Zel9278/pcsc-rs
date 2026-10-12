@@ -30,7 +30,6 @@ mod legacy_dns;
 mod monitor;
 mod status;
 mod thermal;
-#[cfg(not(feature = "android-legacy"))]
 mod update;
 
 pub use config::Config;
@@ -61,11 +60,10 @@ pub fn start(config: &Config) -> ! {
     ))]
     android::prepare_tls();
 
-    #[cfg(not(feature = "android-legacy"))]
-    {
+
         update::check(config.on_update);
         update::spawn_periodic(config.on_update);
-    }
+
 
     let hostname = config.hostname.clone();
     #[cfg(any(target_os = "linux", target_os = "android"))]

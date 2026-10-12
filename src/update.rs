@@ -15,6 +15,7 @@ use crate::config::OnUpdate;
 
 const REPO_OWNER: &str = "SHINTRANET-Lab";
 const REPO_NAME: &str = "pcsc-rs";
+const TARGET: &str = env!("PCSC_TARGET");
 /// Long-running clients look for a new release this often, not only at start.
 const CHECK_INTERVAL: Duration = Duration::from_hours(6);
 /// For the GitHub API call and the download
@@ -77,7 +78,7 @@ pub fn spawn_periodic(on_update: OnUpdate) {
 
 /// `Ok(Some((path, version)))` when the binary at `path` was replaced.
 fn update() -> Result<Option<(std::path::PathBuf, String)>, Box<dyn std::error::Error>> {
-    log!("Checking for a new release ({})", self_update::get_target());
+    log!("Checking for a new release ({TARGET})");
     let updater = self_update::backends::github::Update::configure()
         .repo_owner(REPO_OWNER)
         .repo_name(REPO_NAME)
@@ -94,7 +95,7 @@ fn update() -> Result<Option<(std::path::PathBuf, String)>, Box<dyn std::error::
         .asset_matcher(|assets| {
             assets
                 .iter()
-                .find(|a| is_asset_for(a.name(), self_update::get_target()))
+                .find(|a| is_asset_for(a.name(), TARGET))
                 .cloned()
         })
         // Jump across major versions too (v1 -> v2): the server keeps accepting older clients.

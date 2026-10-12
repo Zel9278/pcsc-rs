@@ -19,6 +19,7 @@ cd "${'$'}(dirname "${'$'}0")" || exit 1
 echo ${'$'}${'$'} > loop.pid
 # The name comes from .env (or the device model), not the shell's HOSTNAME
 unset HOSTNAME
+export TMPDIR=/data/local/tmp/pcsc-rs
 # Started from root (through the client's --as-shell-user), TMPDIR may be missing or
 # the app's, which the shell user cannot write
 export TMPDIR=/data/local/tmp

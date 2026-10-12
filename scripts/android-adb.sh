@@ -170,6 +170,7 @@ case "$command" in
     case "$pass$hostname" in *\'*) echo "PASS と名前に ' は使えない" >&2; exit 1 ;; esac
     {
       printf "PASS='%s'\n" "$pass"
+      printf 'PCSC_UPDATED=terminate\n'
       [ -z "$hostname" ] || printf "HOSTNAME='%s'\n" "$hostname"
       # ほかの設定（PCSC_URI、DEV_MODE など）はそのまま残す
       printf '%s\n' "$old_env" | grep -vE '^(PASS|PCSC_UPDATED|HOSTNAME)=|^$' || true
@@ -187,6 +188,7 @@ cd $DIR || exit 1
 echo \$\$ > loop.pid
 # adb shell は HOSTNAME に機種のコード名を入れてくる。.env の名前（無ければ機種名）を使わせる
 unset HOSTNAME
+export TMPDIR=/data/local/tmp/pcsc-rs
 while true; do
   ./pcsc-rs &
   client_pid=\$!
