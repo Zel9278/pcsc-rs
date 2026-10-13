@@ -6,7 +6,7 @@ use cfg_if::cfg_if;
 use serde::Serialize;
 use std::time::Duration;
 
-use sysinfo::{Cpu, Disks, System};
+use sysinfo::{Disks, System};
 
 use crate::{
     battery::{self, BatteryData},
@@ -19,14 +19,11 @@ use crate::{
 pub struct CoreData {
     #[serde(rename = "cpu")]
     pub(crate) usage: f32,
-}
-
-impl From<&Cpu> for CoreData {
-    fn from(value: &Cpu) -> Self {
-        Self {
-            usage: value.cpu_usage(),
-        }
-    }
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) model: Option<String>,
+    /// Top frequency of the core's cpufreq policy, sent with `model` where known
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) max_mhz: Option<u32>,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -211,14 +208,33 @@ fn cpu_cores(system: &System) -> Vec<CoreData> {
             .iter()
             .map(|c| (c.name().to_owned(), c.cpu_usage()))
             .collect();
-        let total = crate::cpuinfo::possible_cores().unwrap_or(0);
-        crate::cpuinfo::spread_usage(&named, total)
+        let usages =
+            crate::cpuinfo::spread_usage(&named, crate::cpuinfo::possible_cores().unwrap_or(0));
+        let kinds = crate::cpuinfo::core_kinds(crate::android::cpu_model().as_deref());
+        let mixed = crate::cpuinfo::is_mixed(&kinds);
+        usages
             .into_iter()
-            .map(|usage| CoreData { usage })
+            .enumerate()
+            .map(|(i, usage)| {
+                let kind = kinds.get(i).and_then(Option::as_ref).filter(|_| mixed);
+                CoreData {
+                    usage,
+                    model: kind.map(|k| k.name.clone()),
+                    max_mhz: kind.and_then(|k| k.max_mhz),
+                }
+            })
             .collect()
     }
     #[cfg(not(any(target_os = "linux", target_os = "android")))]
-    system.cpus().iter().map(Into::into).collect()
+    system
+        .cpus()
+        .iter()
+        .map(|c| CoreData {
+            usage: c.cpu_usage(),
+            model: None,
+            max_mhz: None,
+        })
+        .collect()
 }
 
 fn storages(disks: &Disks, io: &io::Tracker, interval: Duration) -> Vec<StorageData> {
@@ -362,7 +378,18 @@ pub(crate) fn sample() -> SystemStatus {
         version: "Rust client test".into(),
         cpu: CpuData {
             model: "cpu".into(),
-            cpus: vec![CoreData { usage: 12.5 }],
+            cpus: vec![
+                CoreData {
+                    usage: 12.5,
+                    model: None,
+                    max_mhz: None,
+                },
+                CoreData {
+                    usage: 50.0,
+                    model: Some("Cortex-X4".into()),
+                    max_mhz: Some(2803),
+                },
+            ],
         },
         ram: MemoryData { free: 1, total: 2 },
         swap: MemoryData { free: 0, total: 0 },
@@ -420,7 +447,7 @@ mod tests {
                 "_os": "Arch Linux rolling",
                 "hostname": "host",
                 "version": "Rust client test",
-                "cpu": { "model": "cpu", "cpus": [{ "cpu": 12.5 }] },
+                                "cpu": { "model": "cpu", "cpus": [{ "cpu": 12.5 }, { "cpu": 50.0, "model": "Cortex-X4", "max_mhz": 2803 }] },
                 "ram": { "free": 1, "total": 2 },
                 "swap": { "free": 0, "total": 0 },
                 "storages": [{ "name": "/dev/sda1", "free": 3, "total": 4, "read": 1024, "written": 2048, "busy": 12.5 }],

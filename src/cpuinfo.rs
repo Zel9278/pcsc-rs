@@ -1,7 +1,7 @@
 //! A more useful CPU description than sysinfo's `brand()` on ARM (where it is empty or
 //! "ARMv7 Processor rev 4"), and the real core count when the kernel takes cores offline.
 //!
-//! * model: `<SoC> (4×Cortex-A55 + 4×Cortex-A75)`, from the SoC name (Android properties,
+//! * model: `<SoC> (4x Cortex-A55 + 4x Cortex-A75)`, from the SoC name (Android properties,
 //!   device tree, `/sys/devices/soc0`) and the CPU implementer/part of every core.
 //! * cores: `/sys/devices/system/cpu/possible` counts cores that are currently offline too.
 //!   Phones power cores down (hotplug); `/proc/stat` and `/proc/cpuinfo` then list only the
@@ -9,7 +9,12 @@
 
 #![cfg_attr(not(any(target_os = "linux", target_os = "android")), allow(dead_code))]
 
-use std::{collections::BTreeMap, fs, sync::OnceLock};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs,
+    sync::{Mutex, OnceLock},
+    time::{Duration, Instant},
+};
 
 /// One core as `/proc/cpuinfo` describes it.
 #[derive(Debug, Default, Clone, PartialEq)]
@@ -59,6 +64,9 @@ fn parse_cpuinfo(text: &str) -> Vec<CoreInfo> {
             }
         }
     }
+    // Old 32-bit ARM kernels print the implementer/part once, after all the `processor`
+    // entries, so only the last core got them. Every core without its own is taken to be
+    // like the ones that have them (such SoCs have one kind of core).
     let known = cores
         .iter()
         .rev()
@@ -138,7 +146,7 @@ fn core_name(implementer: u32, part: u32) -> Option<&'static str> {
     })
 }
 
-/// `4×Cortex-A55 + 4×Cortex-A75`, the cores found most (and the fastest first when
+/// `4x Cortex-A55 + 4x Cortex-A75`, the cores found most (and the fastest first when
 /// frequencies are known) listed first. `None` when no core has an implementer/part.
 fn layout(
     cores: &[CoreInfo],
@@ -174,7 +182,7 @@ fn layout(
                 .map(str::to_owned)
                 .or_else(|| core_name(*i, *p).map(str::to_owned))
                 .unwrap_or_else(|| format!("0x{i:02x}:0x{p:03x}"));
-            format!("{n}×{name}")
+            format!("{n}x {name}")
         })
         .collect();
     Some(parts.join(" + "))
@@ -227,8 +235,6 @@ fn compose(soc: Option<&str>, layout: Option<&str>) -> Option<String> {
     }
 }
 
-/// Places sysinfo's per-core usage at its CPU number (`cpu3` → 3) and gives the offline
-/// cores 0, so the list always has `total` entries and keeps each core in its position.
 /// Lists `total` cores from sysinfo's per-core usage, each at its CPU number (`cpu3` → 3).
 /// PC Status shows one figure for the CPU (the average of this list), so an offline core
 /// gets the average of the cores that are running instead of 0 %: a dual-core SoC with one
@@ -331,21 +337,114 @@ fn compute(brand: &str, hint: Option<&str>) -> String {
         Some(n) => fill_offline(cores, n),
         None => cores,
     };
-    let freqs: BTreeMap<usize, u64> = cores
-        .iter()
-        .filter_map(|c| {
-            let f = read(&format!(
-                "/sys/devices/system/cpu/cpu{}/cpufreq/cpuinfo_max_freq",
-                c.index
-            ))?;
-            Some((c.index, f.parse().ok()?))
-        })
-        .collect();
+    let freqs = read_max_freqs(&cores);
     let layout = layout(&cores, &freqs, hint);
     compose(soc_name(&cores).as_deref(), layout.as_deref())
         .or_else(|| brand_is_name.then(|| brand.to_owned()))
         .or_else(|| cores.iter().find_map(|c| c.name.clone()))
         .unwrap_or_default()
+}
+
+/// `cpuinfo_max_freq` (kHz) of each core's cpufreq policy. An offline core often has no
+/// cpufreq directory; it takes the figure of the nearest lower core that has one.
+fn read_max_freqs(cores: &[CoreInfo]) -> BTreeMap<usize, u64> {
+    let mut freqs: BTreeMap<usize, u64> = BTreeMap::new();
+    for c in cores {
+        let path = format!(
+            "/sys/devices/system/cpu/cpu{}/cpufreq/cpuinfo_max_freq",
+            c.index
+        );
+        if let Some(khz) = read(&path).and_then(|t| t.parse().ok()) {
+            freqs.insert(c.index, khz);
+        }
+    }
+    for c in cores {
+        if !freqs.contains_key(&c.index)
+            && let Some((_, khz)) = freqs.range(..c.index).next_back()
+        {
+            let khz = *khz;
+            freqs.insert(c.index, khz);
+        }
+    }
+    freqs
+}
+
+/// One kind of core: its name and the top frequency of its cpufreq policy. Cores of one
+/// design in separate clusters (a prime core beside the big ones) differ in the frequency.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct CoreKind {
+    pub name: String,
+    pub max_mhz: Option<u32>,
+}
+
+/// The kind of each core, at its CPU number. `None` where nothing is known (no CPU part,
+/// as on x86).
+fn kinds_of(
+    cores: &[CoreInfo],
+    freqs: &BTreeMap<usize, u64>,
+    hint: Option<&str>,
+) -> Vec<Option<CoreKind>> {
+    if cores
+        .iter()
+        .any(|c| c.implementer.is_none() || c.part.is_none())
+    {
+        return Vec::new();
+    }
+    let uniform = cores
+        .windows(2)
+        .all(|w| (w[0].implementer, w[0].part) == (w[1].implementer, w[1].part));
+    let mut kinds: Vec<Option<CoreKind>> = Vec::new();
+    for c in cores {
+        let (i, p) = (c.implementer.unwrap_or(0), c.part.unwrap_or(0));
+        let name = hint
+            .filter(|_| uniform)
+            .map(str::to_owned)
+            .or_else(|| core_name(i, p).map(str::to_owned))
+            .unwrap_or_else(|| format!("0x{i:02x}:0x{p:03x}"));
+        let max_mhz = freqs
+            .get(&c.index)
+            .and_then(|khz| u32::try_from(khz / 1000).ok());
+        if kinds.len() <= c.index {
+            kinds.resize(c.index + 1, None);
+        }
+        kinds[c.index] = Some(CoreKind { name, max_mhz });
+    }
+    kinds
+}
+
+/// True when the cores are of more than one kind (big.LITTLE).
+pub fn is_mixed(kinds: &[Option<CoreKind>]) -> bool {
+    kinds.iter().flatten().collect::<BTreeSet<_>>().len() > 1
+}
+
+/// How long a guess about offline cores is kept before looking again.
+const KINDS_RECHECK: Duration = Duration::from_secs(10);
+
+/// The kind of each core, indexed by CPU number. Empty where cores have no CPU part.
+/// A kind never changes, so it is read once; but while some cores were offline their
+/// kind was only guessed (like the nearest lower core), so that is checked again now and then.
+pub fn core_kinds(core_hint: Option<&str>) -> Vec<Option<CoreKind>> {
+    static CACHE: Mutex<Option<(Instant, bool, Vec<Option<CoreKind>>)>> = Mutex::new(None);
+    let mut cache = CACHE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some((at, complete, kinds)) = cache.as_ref()
+        && (*complete || at.elapsed() < KINDS_RECHECK)
+    {
+        return kinds.clone();
+    }
+    let text = fs::read_to_string("/proc/cpuinfo").unwrap_or_default();
+    let listed = parse_cpuinfo(&text);
+    let possible = possible_cores();
+    let complete = possible.is_none_or(|n| listed.len() >= n);
+    let cores = match possible {
+        Some(n) => fill_offline(listed, n),
+        None => listed,
+    };
+    let freqs = read_max_freqs(&cores);
+    let kinds = kinds_of(&cores, &freqs, core_hint);
+    *cache = Some((Instant::now(), complete, kinds.clone()));
+    kinds
 }
 
 /// The CPU's description; read once, since it does not change while running.
@@ -361,6 +460,145 @@ mod tests {
     use super::*;
 
     const SD855: &str = "processor\t: 0\nCPU implementer\t: 0x41\nCPU part\t: 0xd05\n\nprocessor\t: 1\nCPU implementer\t: 0x41\nCPU part\t: 0xd05\n\nprocessor\t: 4\nCPU implementer\t: 0x41\nCPU part\t: 0xd0b\n\nHardware\t: Qualcomm Technologies, Inc SM8150\n";
+
+    #[test]
+    fn big_little_layout() {
+        let cores = parse_cpuinfo(SD855);
+        assert_eq!(cores.len(), 3);
+        assert_eq!(
+            cores[0].hardware.as_deref(),
+            Some("Qualcomm Technologies, Inc SM8150")
+        );
+        let freq = BTreeMap::from([(0, 1_800_000), (1, 1_800_000), (4, 2_840_000)]);
+        assert_eq!(
+            layout(&cores, &freq, None).unwrap(),
+            "1x Cortex-A76 + 2x Cortex-A55"
+        );
+        // Without frequencies the part ID decides
+        assert_eq!(
+            layout(&cores, &BTreeMap::new(), None).unwrap(),
+            "1x Cortex-A76 + 2x Cortex-A55"
+        );
+    }
+
+    #[test]
+    fn old_kernel_prints_part_once() {
+        // Krait 400 (Linux 3.4): four cores, one implementer/part block at the end
+        let text = "Processor\t: ARMv7 Processor rev 0 (v7l)\nprocessor\t: 0\nBogoMIPS\t: 38.40\n\nprocessor\t: 1\nBogoMIPS\t: 38.40\n\nprocessor\t: 2\nBogoMIPS\t: 38.40\n\nprocessor\t: 3\nBogoMIPS\t: 38.40\n\nFeatures\t: swp half thumb\nCPU implementer\t: 0x51\nCPU part\t: 0x06f\n\nHardware\t: Qualcomm MSM 8974\n";
+        let cores = parse_cpuinfo(text);
+        assert_eq!(cores.len(), 4);
+        assert_eq!(
+            layout(&cores, &BTreeMap::new(), Some("Krait 400")).unwrap(),
+            "4x Krait 400"
+        );
+    }
+
+    #[test]
+    fn offline_cores_come_back() {
+        // dual core, second one asleep
+        let cores = parse_cpuinfo("processor : 0\nCPU implementer : 0x41\nCPU part : 0xc09\n");
+        let cores = fill_offline(cores, 2);
+        assert_eq!(cores.len(), 2);
+        assert_eq!(
+            layout(&cores, &BTreeMap::new(), None).unwrap(),
+            "2x Cortex-A9"
+        );
+    }
+
+    #[test]
+    fn hint_names_uniform_cores_only() {
+        let krait = parse_cpuinfo(
+            "processor : 0\nCPU implementer : 0x51\nCPU part : 0x06f\nprocessor : 1\nCPU implementer : 0x51\nCPU part : 0x06f\n",
+        );
+        assert_eq!(
+            layout(&krait, &BTreeMap::new(), Some("Krait 400")).unwrap(),
+            "2x Krait 400"
+        );
+        let mixed = parse_cpuinfo(SD855);
+        assert_eq!(
+            layout(&mixed, &BTreeMap::new(), Some("Krait 400")).unwrap(),
+            "1x Cortex-A76 + 2x Cortex-A55"
+        );
+    }
+
+    fn eight_cores(extra_freqs: bool) -> (Vec<CoreInfo>, BTreeMap<usize, u64>) {
+        let mut text = String::new();
+        for i in 0..8 {
+            let part = if i < 4 { "0xd05" } else { "0xd0b" };
+            text += &format!("processor\t: {i}\nCPU implementer\t: 0x41\nCPU part\t: {part}\n\n");
+        }
+        let cores = parse_cpuinfo(&text);
+        let mut freqs = BTreeMap::new();
+        for i in 0..8 {
+            let khz = match i {
+                0..=3 => 1_800_000,
+                7 if extra_freqs => 2_840_000,
+                _ => 2_420_000,
+            };
+            freqs.insert(i, khz);
+        }
+        (cores, freqs)
+    }
+
+    #[test]
+    fn kinds_split_by_name_and_frequency() {
+        let (cores, freqs) = eight_cores(true);
+        let kinds = kinds_of(&cores, &freqs, None);
+        assert_eq!(kinds.len(), 8);
+        assert_eq!(
+            kinds[0],
+            Some(CoreKind {
+                name: "Cortex-A55".into(),
+                max_mhz: Some(1800)
+            })
+        );
+        // the prime core is the same design as the big ones, told apart by its frequency
+        assert_eq!(kinds[4].as_ref().unwrap().name, "Cortex-A76");
+        assert_eq!(kinds[4].as_ref().unwrap().max_mhz, Some(2420));
+        assert_eq!(kinds[7].as_ref().unwrap().max_mhz, Some(2840));
+        assert!(is_mixed(&kinds));
+    }
+
+    #[test]
+    fn one_kind_is_not_mixed() {
+        let cores = parse_cpuinfo(
+            "processor : 0\nprocessor : 1\nprocessor : 2\nprocessor : 3\nCPU implementer : 0x51\nCPU part : 0x06f\n",
+        );
+        let freqs = BTreeMap::from([
+            (0, 2_150_000),
+            (1, 2_150_000),
+            (2, 2_150_000),
+            (3, 2_150_000),
+        ]);
+        let kinds = kinds_of(&cores, &freqs, Some("Krait 400"));
+        assert_eq!(kinds.len(), 4);
+        assert_eq!(kinds[3].as_ref().unwrap().name, "Krait 400");
+        assert!(!is_mixed(&kinds));
+        // no CPU part (x86): nothing is known
+        let x86 = parse_cpuinfo("processor : 0\nmodel name : Intel(R) Core(TM) i7\n");
+        assert!(kinds_of(&x86, &BTreeMap::new(), None).is_empty());
+    }
+
+    #[test]
+    fn offline_cores_take_the_nearest_lower_kind() {
+        let cores = parse_cpuinfo(
+            "processor : 0\nCPU implementer : 0x41\nCPU part : 0xd05\n\nprocessor : 4\nCPU implementer : 0x41\nCPU part : 0xd0b\n",
+        );
+        let cores = fill_offline(cores, 8);
+        let kinds = kinds_of(&cores, &BTreeMap::new(), None);
+        assert_eq!(kinds.len(), 8);
+        assert_eq!(kinds[1].as_ref().unwrap().name, "Cortex-A55");
+        assert_eq!(kinds[4].as_ref().unwrap().name, "Cortex-A76");
+        assert_eq!(kinds[7].as_ref().unwrap().name, "Cortex-A76");
+    }
+
+    #[test]
+    fn ranges() {
+        assert_eq!(parse_range_count("0-1\n"), Some(2));
+        assert_eq!(parse_range_count("0"), Some(1));
+        assert_eq!(parse_range_count("0-3,6-7"), Some(6));
+        assert_eq!(parse_range_count("x"), None);
+    }
 
     #[test]
     fn spreads_usage() {
@@ -380,48 +618,12 @@ mod tests {
     }
 
     #[test]
-    fn offline_cores_come_back() {
-        // dual core, second one asleep
-        let cores = parse_cpuinfo("processor : 0\nCPU implementer : 0x41\nCPU part : 0xc09\n");
-        let cores = fill_offline(cores, 2);
-        assert_eq!(cores.len(), 2);
-        assert_eq!(
-            layout(&cores, &BTreeMap::new(), None).unwrap(),
-            "2×Cortex-A9"
-        );
-    }
-
-    #[test]
-    fn hint_names_uniform_cores_only() {
-        let krait = parse_cpuinfo(
-            "processor : 0\nCPU implementer : 0x51\nCPU part : 0x06f\nprocessor : 1\nCPU implementer : 0x51\nCPU part : 0x06f\n",
-        );
-        assert_eq!(
-            layout(&krait, &BTreeMap::new(), Some("Krait 400")).unwrap(),
-            "2×Krait 400"
-        );
-        let mixed = parse_cpuinfo(SD855);
-        assert_eq!(
-            layout(&mixed, &BTreeMap::new(), Some("Krait 400")).unwrap(),
-            "1×Cortex-A76 + 2×Cortex-A55"
-        );
-    }
-
-    #[test]
-    fn ranges() {
-        assert_eq!(parse_range_count("0-1\n"), Some(2));
-        assert_eq!(parse_range_count("0"), Some(1));
-        assert_eq!(parse_range_count("0-3,6-7"), Some(6));
-        assert_eq!(parse_range_count("x"), None);
-    }
-
-    #[test]
     fn compose_names() {
         assert_eq!(
             compose(Some("Raspberry Pi 4"), Some("4x Cortex-A72")).unwrap(),
             "4x Cortex-A72 (Raspberry Pi 4)"
         );
-        assert_eq!(compose(None, Some("2×Cortex-A9")).unwrap(), "2×Cortex-A9");
+        assert_eq!(compose(None, Some("2x Cortex-A9")).unwrap(), "2x Cortex-A9");
         assert!(compose(None, None).is_none());
     }
 }
