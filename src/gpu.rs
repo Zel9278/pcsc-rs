@@ -143,7 +143,7 @@ mod mobile {
     use std::{
         fs,
         process::Command,
-        sync::Mutex,
+        sync::{Mutex, OnceLock},
         time::{Duration, Instant},
     };
 
@@ -155,12 +155,21 @@ mod mobile {
     /// `dumpsys` takes a few tens of milliseconds; once in a while is enough
     const MEMORY_INTERVAL: Duration = Duration::from_secs(5);
 
-    pub fn get_info() -> Option<GpuData> {
+        pub fn get_info() -> Option<GpuData> {
         let (name, usage) = adreno()
             .or_else(samsung)
             .or_else(mediatek_mali)
             .or_else(generic_mali)
             .or_else(powervr)?;
+        // 汎用名（"Arm Mali" など）しか分からないときは、GLES の名前に置き換える
+        let name = if matches!(
+            name.as_str(),
+            "Samsung" | "MediaTek" | "Arm Mali" | "PowerVR" | "Adreno"
+        ) {
+            renderer_name().unwrap_or(name)
+        } else {
+            name
+        };
         Some(GpuData {
             name,
             usage,
@@ -188,8 +197,6 @@ mod mobile {
         let model = fs::read_to_string(format!("{SAMSUNG}/gpu_model")).unwrap_or_default();
         let model = model.trim();
         Some((
-            // 変更前: if model.is_empty() { "GPU".into() } else { model.into() }
-            // 変更後:
             if model.is_empty() {
                 "Samsung".into()
             } else {
@@ -224,6 +231,25 @@ mod mobile {
             return Some(("PowerVR".into(), percent(&busy)?));
         }
         None
+    }
+        /// GPU name from SurfaceFlinger (`GLES: Qualcomm, Adreno (TM) 640, …` → `Adreno 640`).
+    /// Read once: the dump is large and the GPU does not change.
+    fn renderer_name() -> Option<String> {
+        static NAME: OnceLock<Option<String>> = OnceLock::new();
+        NAME.get_or_init(|| {
+            if !crate::android::is_android() {
+                return None;
+            }
+            let output = crate::cmd::run(Command::new("dumpsys").arg("SurfaceFlinger")).ok()?;
+            gles_renderer(&output.stdout)
+        })
+        .clone()
+    }
+
+    pub(super) fn gles_renderer(dump: &str) -> Option<String> {
+        let line = dump.lines().find_map(|l| l.trim().strip_prefix("GLES:"))?;
+        let renderer = line.split(',').nth(1)?.trim().replace(" (TM)", "");
+        (!renderer.is_empty()).then_some(renderer)
     }
     /// The first number in the text as a percentage: `12 %`, `12%`, `12`.
     pub(super) fn percent(text: &str) -> Option<f64> {
@@ -361,7 +387,7 @@ mod tests {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     #[test]
     fn adreno() {
-        use super::mobile::{global_total, mem_total_kib, name, percent, usage};
+        use super::mobile::{global_total, mem_total_kib, name, percent, usage, gles_renderer};
         assert_eq!(
             usage("  23464 1006294"),
             Some(23464.0 / 1_006_294.0 * 100.0)
@@ -388,5 +414,14 @@ mod tests {
             mem_total_kib("MemTotal:       11629912 kB\nMemFree:  1 kB\n"),
             Some(11_629_912)
         );
+                assert_eq!(
+            gles_renderer("GLES: Qualcomm, Adreno (TM) 640, OpenGL ES 3.2 V@415.0\n").as_deref(),
+            Some("Adreno 640")
+        );
+        assert_eq!(
+            gles_renderer("GLES: ARM, Mali-G78 MC10, OpenGL ES 3.2 v1.r32p1\n").as_deref(),
+            Some("Mali-G78 MC10")
+        );
+        assert_eq!(gles_renderer("nothing"), None);
     }
 }
