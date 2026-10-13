@@ -1,6 +1,20 @@
 # Changelog
 
 ## [0.11.0](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.10.0...v0.11.0) (2026-10-13)
+
+
+### Features
+
+* CPU model ([3f78306](https://github.com/SHINTRANET-Lab/pcsc-rs/commit/3f78306e82ac93a22b32a3e1f9b123abd2ff5184))
+* report Intel and AMD GPUs on Linux, Windows and macOS ([c17c1ce](https://github.com/SHINTRANET-Lab/pcsc-rs/commit/c17c1ce145484243d6147a6c634460e1380e2c30))
+
+
+### Bug Fixes
+
+* build the Windows GPU reader, and lint it and the macOS one ([30e04da](https://github.com/SHINTRANET-Lab/pcsc-rs/commit/30e04dacad88702858e75291d2e6259960bb44f4))
+* verison ([46d39dc](https://github.com/SHINTRANET-Lab/pcsc-rs/commit/46d39dcca5c5e2bc55912984045496dfd165918e))
+
+## [0.11.0](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.10.0...v0.11.0) (2026-10-13)
 GPU
 
 ### Features
