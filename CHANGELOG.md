@@ -1,7 +1,7 @@
 # Changelog
 
 ## [0.11.0](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.10.0...v0.11.0) (2026-10-13)
-
+GPU
 
 ### Features
 
