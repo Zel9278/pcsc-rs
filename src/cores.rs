@@ -5,7 +5,11 @@
 //! On ARM Linux and Android, cores are grouped by name and the top frequency of their
 //! policy, so cores of one design in separate clusters (a prime core beside the big
 //! ones) are told apart, while servers with a policy per core are not split up.
-//! Elsewhere (x86, where every core has the same name) they are grouped by name only.
+//! Elsewhere (x86, where every core has the same name) they are grouped by name only:
+//! there the top frequency can differ between cores of one kind (Intel's favoured
+//! cores), which is no reason to split them.
+//!
+//! Every core's top frequency is reported on Linux and Android anyway ([`max_mhz`]).
 
 /// One kind of core.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -33,7 +37,7 @@ pub fn per_core(brands: &[&str]) -> Vec<Kind> {
                 } else {
                     (*brand).to_owned()
                 },
-                max_mhz: arm::max_mhz(i),
+                max_mhz: max_mhz(i),
             })
             .collect()
     }
@@ -50,6 +54,31 @@ pub fn per_core(brands: &[&str]) -> Vec<Kind> {
             })
             .collect()
     }
+}
+
+/// The top frequency of each core's cpufreq policy in MHz, where the kernel gives one.
+pub fn max_mhz_per_core(count: usize) -> Vec<Option<u32>> {
+    (0..count)
+        .map(|core| {
+            #[cfg(any(target_os = "linux", target_os = "android"))]
+            return max_mhz(core);
+            #[cfg(not(any(target_os = "linux", target_os = "android")))]
+            {
+                let _ = core;
+                None
+            }
+        })
+        .collect()
+}
+
+/// `cpuinfo_max_freq` of the core's policy, in MHz.
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn max_mhz(core: usize) -> Option<u32> {
+    let khz = std::fs::read_to_string(format!(
+        "/sys/devices/system/cpu/cpu{core}/cpufreq/cpuinfo_max_freq"
+    ))
+    .ok()?;
+    khz.trim().parse::<u32>().ok().map(|khz| khz / 1000)
 }
 
 /// The kinds with how many cores of each, in the order they first appear.
@@ -95,15 +124,6 @@ pub fn model(cores: &[Kind]) -> String {
 ))]
 mod arm {
     use std::{collections::HashMap, fs};
-
-    /// `cpuinfo_max_freq` of the core's policy, in MHz.
-    pub fn max_mhz(core: usize) -> Option<u32> {
-        let khz = fs::read_to_string(format!(
-            "/sys/devices/system/cpu/cpu{core}/cpufreq/cpuinfo_max_freq"
-        ))
-        .ok()?;
-        khz.trim().parse::<u32>().ok().map(|khz| khz / 1000)
-    }
 
     /// `implementer:part` of each core from /proc/cpuinfo, e.g. `0x41:0xd82`.
     pub fn part_ids() -> HashMap<usize, String> {

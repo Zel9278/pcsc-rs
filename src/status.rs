@@ -22,8 +22,8 @@ pub struct CoreData {
     /// The kind of core (`Cortex-X4`), sent only where the cores differ
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) model: Option<String>,
-    /// Top frequency of the core's cpufreq policy, sent with `model` where known. With
-    /// it, cores of one design in separate clusters are told apart.
+    /// Top frequency of the core's cpufreq policy, where known (Linux, Android). With
+    /// `model`, it tells apart cores of one design in separate clusters.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) max_mhz: Option<u32>,
 }
@@ -143,17 +143,17 @@ impl SystemStatus {
         }
 
         let cores = system.cpus();
-        let kinds = core_kinds(cores);
+        let (kinds, max_mhz) = core_kinds(cores);
         let mixed = cores::group(&kinds).len() > 1;
         let cpu = CpuData {
             model: cores::model(&kinds),
             cpus: cores
                 .iter()
-                .zip(&kinds)
-                .map(|(core, kind)| CoreData {
+                .zip(kinds.iter().zip(max_mhz))
+                .map(|(core, (kind, max_mhz))| CoreData {
                     usage: core.cpu_usage(),
                     model: mixed.then(|| kind.name.clone()),
-                    max_mhz: kind.max_mhz.filter(|_| mixed),
+                    max_mhz,
                 })
                 .collect(),
         };
@@ -422,15 +422,20 @@ pub(crate) fn sample() -> SystemStatus {
     }
 }
 
-/// The kinds of core, which do not change while the client runs.
-fn core_kinds(cores: &[Cpu]) -> Vec<cores::Kind> {
-    static KINDS: OnceLock<Vec<cores::Kind>> = OnceLock::new();
-    let kinds =
-        KINDS.get_or_init(|| cores::per_core(&cores.iter().map(Cpu::brand).collect::<Vec<_>>()));
-    if kinds.len() == cores.len() {
+/// The kinds of core and their top frequencies, which do not change while the client runs.
+fn core_kinds(cores: &[Cpu]) -> (Vec<cores::Kind>, Vec<Option<u32>>) {
+    static KINDS: OnceLock<(Vec<cores::Kind>, Vec<Option<u32>>)> = OnceLock::new();
+    let read = || {
+        (
+            cores::per_core(&cores.iter().map(Cpu::brand).collect::<Vec<_>>()),
+            cores::max_mhz_per_core(cores.len()),
+        )
+    };
+    let kinds = KINDS.get_or_init(read);
+    if kinds.0.len() == cores.len() {
         kinds.clone()
     } else {
-        cores::per_core(&cores.iter().map(Cpu::brand).collect::<Vec<_>>())
+        read()
     }
 }
 
