@@ -19,14 +19,9 @@ use crate::{
 pub struct CoreData {
     #[serde(rename = "cpu")]
     pub(crate) usage: f32,
-}
-
-impl From<&Cpu> for CoreData {
-    fn from(value: &Cpu) -> Self {
-        Self {
-            usage: value.cpu_usage(),
-        }
-    }
+    /// The kind of core (`Cortex-X4`), sent only where the cores differ
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) model: Option<String>,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -143,9 +138,17 @@ impl SystemStatus {
             }
         }
 
+        let cores = system.cpus();
+        let mixed = cores.iter().any(|c| c.brand() != cores[0].brand());
         let cpu = CpuData {
-            model: cpu_model(system.cpus().iter().map(Cpu::brand)),
-            cpus: system.cpus().iter().map(Into::into).collect(),
+            model: cpu_model(cores.iter().map(Cpu::brand)),
+            cpus: cores
+                .iter()
+                .map(|c| CoreData {
+                    usage: c.cpu_usage(),
+                    model: mixed.then(|| c.brand().to_owned()),
+                })
+                .collect(),
         };
 
         let storages = storages(disks, io, *interval);
@@ -320,7 +323,16 @@ pub(crate) fn sample() -> SystemStatus {
         version: "Rust client test".into(),
         cpu: CpuData {
             model: "cpu".into(),
-            cpus: vec![CoreData { usage: 12.5 }],
+            cpus: vec![
+                CoreData {
+                    usage: 12.5,
+                    model: None,
+                },
+                CoreData {
+                    usage: 50.0,
+                    model: Some("Cortex-X4".into()),
+                },
+            ],
         },
         ram: MemoryData { free: 1, total: 2 },
         swap: MemoryData { free: 0, total: 0 },
@@ -416,7 +428,7 @@ mod tests {
                 "_os": "Arch Linux rolling",
                 "hostname": "host",
                 "version": "Rust client test",
-                "cpu": { "model": "cpu", "cpus": [{ "cpu": 12.5 }] },
+                "cpu": { "model": "cpu", "cpus": [{ "cpu": 12.5 }, { "cpu": 50.0, "model": "Cortex-X4" }] },
                 "ram": { "free": 1, "total": 2 },
                 "swap": { "free": 0, "total": 0 },
                 "storages": [{ "name": "/dev/sda1", "free": 3, "total": 4, "read": 1024, "written": 2048, "busy": 12.5 }],
