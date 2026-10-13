@@ -350,6 +350,11 @@ fn platform() -> (String, String, Option<String>) {
             crate::android::device_name().or_else(System::host_name),
         );
     }
+    // Proxmox runs on Debian, whose os-release it keeps
+    #[cfg(target_os = "linux")]
+    if let Some((name, version)) = proxmox() {
+        return (name, version, System::host_name());
+    }
     #[cfg_attr(not(windows), allow(unused_mut))]
     let mut name = System::name().unwrap_or_else(|| "Unknown OS".into());
     #[cfg_attr(not(windows), allow(unused_mut))]
@@ -367,6 +372,46 @@ fn platform() -> (String, String, Option<String>) {
         name = product;
     }
     (name, version, System::host_name())
+}
+
+/// `Proxmox VE 9.2.6` (or Proxmox Backup Server) on the host itself, not in its guests:
+/// its configuration directory, and the version of its package. Read once; dpkg's status
+/// file is large.
+#[cfg(target_os = "linux")]
+fn proxmox() -> Option<(String, String)> {
+    static PROXMOX: std::sync::OnceLock<Option<(String, String)>> = std::sync::OnceLock::new();
+    PROXMOX
+        .get_or_init(|| {
+            let (name, package) = [
+                ("/etc/pve", "Proxmox VE", "pve-manager"),
+                (
+                    "/etc/proxmox-backup",
+                    "Proxmox Backup Server",
+                    "proxmox-backup-server",
+                ),
+            ]
+            .into_iter()
+            .find(|(dir, ..)| std::path::Path::new(dir).is_dir())
+            .map(|(_, name, package)| (name, package))?;
+            let status = std::fs::read_to_string("/var/lib/dpkg/status").ok()?;
+            Some((name.to_owned(), dpkg_version(&status, package)?))
+        })
+        .clone()
+}
+
+/// The version of an installed package in dpkg's status file.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn dpkg_version(status: &str, package: &str) -> Option<String> {
+    status.split("\n\n").find_map(|entry| {
+        let field = |name: &str| {
+            entry
+                .lines()
+                .find_map(|line| line.strip_prefix(name)?.strip_prefix(':'))
+                .map(str::trim)
+        };
+        (field("Package") == Some(package) && field("Status")?.ends_with(" installed"))
+            .then(|| field("Version").map(str::to_owned))?
+    })
 }
 
 #[cfg(test)]
@@ -427,6 +472,25 @@ pub(crate) fn sample() -> SystemStatus {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn dpkg_version() {
+        let status = "Package: pve-manager\nStatus: install ok installed\nVersion: 9.2.6\n\n\
+                      Package: pve-kernel\nStatus: deinstall ok config-files\nVersion: 1.0\n\n\
+                      Package: proxmox-backup-server\nStatus: install ok installed\n\
+                      Architecture: amd64\nVersion: 4.0.11\n";
+        assert_eq!(
+            super::dpkg_version(status, "pve-manager").as_deref(),
+            Some("9.2.6")
+        );
+        assert_eq!(
+            super::dpkg_version(status, "proxmox-backup-server").as_deref(),
+            Some("4.0.11")
+        );
+        // Removed, and not there at all
+        assert_eq!(super::dpkg_version(status, "pve-kernel"), None);
+        assert_eq!(super::dpkg_version(status, "pve"), None);
+    }
+
     #[test]
     fn storage_filters() {
         use std::ffi::OsStr;
