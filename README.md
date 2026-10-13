@@ -38,7 +38,7 @@ HOSTNAME=ホスト名として表示させたい文字列
 
 ## 使い方
 
-Windows・Linux・macOS は[コマンド1つ](#windows)で、Android は PC から adb で、NixOS などの Nix では [flake](#nix) で入れられます。
+Windows・Linux・macOS は[コマンド1つ](#windows)で、Synology NAS は [DSM のタスクスケジューラ](#synology-nas)で、Android は PC から adb で、NixOS などの Nix では [flake](#nix) で入れられます。
 
 ### Windows
 
@@ -118,6 +118,25 @@ sudo systemctl enable --now pcsc-rs
 ```
 
 </details>
+
+### Synology NAS
+
+SSH を有効にしなくても、DSM のタスクスケジューラで入れられます（[scripts/synology.sh](scripts/synology.sh)）。x86_64 と arm64 の機種に対応しています。
+
+1. 「コントロールパネル」→「タスクスケジューラ」→「作成」→「トリガーされたタスク」→「ユーザー指定のスクリプト」
+2. 「全般」でユーザーを `root`、イベントを「ブートアップ」にする
+3. 「タスク設定」のユーザー指定のスクリプトに次の1行を書く
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/scripts/synology.sh | PASS=npU7pmkkYfuUdKfqzm2BtDfBPEe4pizrXyPVj8Fby3KaUtehNu3ToDtM8uEdGBr3AS9LRUkZixtZxuKTvsL2e4BVrfzWWG7RqqVThLWsVLHLaJJ8ekeGuHtLBkfZpBtv sh
+```
+
+4. 作ったタスクを右クリックして「実行」すると、再起動しなくてもすぐ動きます
+
+- `/volume1/pcsc-rs` に置いて動かします（DSM の更新で消えないよう、データボリュームに置きます。`PCSC_DIR=` で変えられます）。ログは `/volume1/pcsc-rs/pcsc-rs.log` です
+- 落ちたとき・自動更新のあとは 5 秒後に起動し直します。以後の更新は pcsc-rs が自分で行います
+- 表示名を変えるときは `PCSC_HOSTNAME=<名前>` を付けます（DSM のシェルは `HOSTNAME` を自分で入れるので、この名前で渡します）
+- 2回目からは `PASS=` を省けます（置き場所の `.env` を使います）。止めるときは、同じ1行に `PCSC_STOP=1` を付けて実行します
 
 ### macOS
 
