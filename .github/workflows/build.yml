@@ -111,6 +111,51 @@ jobs:
             gh release upload ${{ inputs.tag-name }} "$filename"#${{ matrix.platform.target }} --clobber
           fi
 
+  # Runs each build against a stand-in PC Status server and checks every status it sends
+  # (.github/e2e/run.py). The runners have no real GPU, but the code that looks for one
+  # still runs: DXGI and the performance counters on Windows, ioreg on macOS.
+  e2e:
+    needs: build
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-24.04
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-24.04-arm
+          - target: aarch64-apple-darwin
+            os: macos-14
+          - target: x86_64-pc-windows-msvc
+            os: windows-2022
+          # The XP build, on a current Windows
+          - target: i686-pc-windows-msvc
+            os: windows-2022
+    runs-on: ${{ matrix.platform.os }}
+    defaults:
+      run:
+        shell: bash -xe {0}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          sparse-checkout: .github/e2e
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dev-${{ matrix.platform.target }}
+          path: client
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+      - run: python -m pip install websockets==17.2
+      - name: Run the client against a stand-in server
+        run: |
+          client=client/debug/pcsc-rs
+          [ -e "$client.exe" ] && client="$client.exe"
+          chmod +x "$client"
+          python .github/e2e/run.py --client "$client" --hostname "e2e-${{ matrix.platform.target }}"
+
   # The Android app (android/): the aarch64-linux-android client inside an APK, run with root or Shizuku
   android-app:
     needs: build
