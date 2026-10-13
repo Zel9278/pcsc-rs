@@ -48,6 +48,10 @@ fn parse_cpuinfo(text: &str) -> Vec<CoreInfo> {
             // After the cores on ARM: applies to the whole machine
             "Hardware" => hardware = Some(value.to_owned()),
             _ => {
+                // Single-core kernels print no `processor` line at all
+                if cores.is_empty() && matches!(key, "CPU implementer" | "CPU part") {
+                    cores.push(CoreInfo::default());
+                }
                 let Some(core) = cores.last_mut() else {
                     continue;
                 };
@@ -175,6 +179,8 @@ fn layout(
     groups.sort_by(|a, b| b.1.1.cmp(&a.1.1).then(b.0.1.cmp(&a.0.1)));
     // A single kind of core: the caller may know its name better ("Krait 400" for "Krait")
     let hint = hint.filter(|_| groups.len() == 1);
+    // One core of one kind (single-core SoCs): just its name, no count
+    let single = groups.len() == 1 && groups[0].1.0 == 1;
     let parts: Vec<String> = groups
         .iter()
         .map(|((i, p), (n, ..))| {
@@ -182,12 +188,11 @@ fn layout(
                 .map(str::to_owned)
                 .or_else(|| core_name(*i, *p).map(str::to_owned))
                 .unwrap_or_else(|| format!("0x{i:02x}:0x{p:03x}"));
-            format!("{n}×{name}")
+            if single { name } else { format!("{n}×{name}") }
         })
         .collect();
     Some(parts.join(" + "))
 }
-
 /// Cores that exist but were not listed (offline) are assumed to be like the closest lower one.
 fn fill_offline(mut cores: Vec<CoreInfo>, possible: usize) -> Vec<CoreInfo> {
     for index in 0..possible {
@@ -316,9 +321,35 @@ fn soc_name(cores: &[CoreInfo]) -> Option<String> {
             _ => machine,
         });
     }
+    let platform = getprop("ro.board.platform");
+    if let Some(p) = platform.as_deref() {
+        let brand = brand_of(p);
+        if brand != p.trim() {
+            return Some(brand);
+        }
+    }
     getprop("ro.hardware.chipname")
         .or_else(|| cores.iter().find_map(|c| c.hardware.clone()))
-        .or_else(|| getprop("ro.board.platform"))
+        .or(platform)
+        .map(|raw| brand_of(&raw))
+}
+
+/// ボードのコード名("msm7k", "QCT MSM8255 SURF")を通り名("Snapdragon")にいたしますわ。
+fn brand_of(raw: &str) -> String {
+    let lower = raw.trim().to_lowercase();
+    let qualcomm = [
+        "msm", "qsd", "apq", "mdm", "sdm", "sm8", "sm7", "sm6", "sm4",
+    ]
+    .iter()
+    .any(|p| lower.starts_with(p))
+        || lower.contains("qualcomm")
+        || lower.contains("qct")
+        || lower.contains("snapdragon");
+    if qualcomm {
+        "Snapdragon".to_owned()
+    } else {
+        raw.trim().to_owned()
+    }
 }
 
 fn compute(brand: &str, hint: Option<&str>) -> String {
@@ -423,6 +454,37 @@ const KINDS_RECHECK: Duration = Duration::from_secs(10);
 /// The kind of each core, indexed by CPU number. Empty where cores have no CPU part.
 /// A kind never changes, so it is read once; but while some cores were offline their
 /// kind was only guessed (like the nearest lower core), so that is checked again now and then.
+pub fn max_mhz_per_core(total: usize) -> Vec<Option<u32>> {
+    static CACHE: Mutex<Option<(Instant, usize, bool, Vec<Option<u32>>)>> = Mutex::new(None);
+    let total = total.max(possible_cores().unwrap_or(0));
+    let mut cache = CACHE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some((at, n, complete, mhz)) = cache.as_ref()
+        && *n == total
+        && (*complete || at.elapsed() < KINDS_RECHECK)
+    {
+        return mhz.clone();
+    }
+    let cores: Vec<CoreInfo> = (0..total)
+        .map(|index| CoreInfo {
+            index,
+            ..CoreInfo::default()
+        })
+        .collect();
+    let freqs = read_max_freqs(&cores);
+    let complete = (0..total).all(|i| {
+        read(&format!(
+            "/sys/devices/system/cpu/cpu{i}/cpufreq/cpuinfo_max_freq"
+        ))
+        .is_some()
+    });
+    let mhz: Vec<Option<u32>> = (0..total)
+        .map(|i| freqs.get(&i).and_then(|khz| u32::try_from(khz / 1000).ok()))
+        .collect();
+    *cache = Some((Instant::now(), total, complete, mhz.clone()));
+    mhz
+}
 pub fn core_kinds(core_hint: Option<&str>) -> Vec<Option<CoreKind>> {
     static CACHE: Mutex<Option<(Instant, bool, Vec<Option<CoreKind>>)>> = Mutex::new(None);
     let mut cache = CACHE
@@ -625,5 +687,10 @@ mod tests {
         );
         assert_eq!(compose(None, Some("2×Cortex-A9")).unwrap(), "2×Cortex-A9");
         assert!(compose(None, None).is_none());
+    }
+    #[test]
+    fn max_mhz_per_core_has_one_entry_per_core() {
+        // Whatever this machine is, the list has one slot per core asked for
+        assert!(max_mhz_per_core(2).len() >= 2);
     }
 }

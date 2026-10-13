@@ -212,6 +212,7 @@ fn cpu_cores(system: &System) -> Vec<CoreData> {
             crate::cpuinfo::spread_usage(&named, crate::cpuinfo::possible_cores().unwrap_or(0));
         let kinds = crate::cpuinfo::core_kinds(crate::android::cpu_model().as_deref());
         let mixed = crate::cpuinfo::is_mixed(&kinds);
+        let freqs = crate::cpuinfo::max_mhz_per_core(usages.len());
         usages
             .into_iter()
             .enumerate()
@@ -220,7 +221,7 @@ fn cpu_cores(system: &System) -> Vec<CoreData> {
                 CoreData {
                     usage,
                     model: kind.map(|k| k.name.clone()),
-                    max_mhz: kind.and_then(|k| k.max_mhz),
+                    max_mhz: freqs.get(i).copied().flatten(),
                 }
             })
             .collect()
