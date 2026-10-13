@@ -207,7 +207,7 @@ LOOP
    sdk=$(adb shell getprop ro.build.version.sdk | tr -d '\r')
     start_pid=
     if [ "${sdk:-0}" -ge 24 ] 2>/dev/null; then
-      adb shell "cd $DIR && nohup ./loop.sh > $DIR/pcsc-rs.log 2>&1 < /dev/null &"
+            adb shell "cd $DIR || exit 1; nohup ./loop.sh > $DIR/pcsc-rs.log 2>&1 < /dev/null &"
     else
       start_cmd="cd $DIR && ./loop.sh > $DIR/pcsc-rs.log 2>&1 < /dev/null"
       if [ -n "$serial" ]; then

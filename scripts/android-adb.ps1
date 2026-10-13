@@ -247,7 +247,7 @@ if ($logLines.Count -gt 0) {
         "Stopped"
     }
     "status" {
-        $ps = @(Invoke-Remote "ps | while read user pid ppid vsize rss wchan pc state name; do case `$name in pcsc-rs|*/pcsc-rs) echo `$user `$pid `$ppid `$vsize `$rss `$wchan `$pc `$state `$name ;; esac; done")
+        $ps = @(            Invoke-Remote "cd $Dir || exit 1; nohup ./loop.sh > $Dir/pcsc-rs.log 2>&1 < /dev/null &" | Out-Null)
         if ($ps.Count -gt 0) { $ps } else { "Not running" }
     }
     "log" {
