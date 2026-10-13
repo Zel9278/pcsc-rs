@@ -184,6 +184,8 @@ case "$command" in
     # 本体が終わったら（落ちた・更新した）5 秒後に起動し直す。.env は作業フォルダから読まれる
     adb shell "cat > $DIR/loop.sh" <<LOOP
 #!/system/bin/sh
+trap '' HUP
+export TMPDIR=$DIR
 cd $DIR || exit 1
 echo \$\$ > loop.pid
 # adb shell は HOSTNAME に機種のコード名を入れてくる。.env の名前（無ければ機種名）を使わせる
@@ -202,33 +204,43 @@ LOOP
     # 今回の出力だけで接続を確かめられるよう、古いログを空にする
     adb shell "cd $DIR && : > pcsc-rs.log"
 
-    # すべての入出力を切り離して起動する。古い Android の toolbox には setsid が無く、
-    # nohup も無いことがある（Android 4.x のシェルは nohup を別名として持つので type では調べられない）。
-    start_cmd="cd $DIR && if [ -x /system/bin/nohup ] || [ -x /system/xbin/nohup ]; then nohup ./loop.sh > $DIR/pcsc-rs.log 2>&1 < /dev/null & else ./loop.sh > $DIR/pcsc-rs.log 2>&1 < /dev/null & fi"
-    # Android 5.0 の adbd は、背景の子プロセスがいる間 adb shell を終わらせないことがある。
-    # adb を背景で動かし、loop.pid ができたのを確かめてから、PC 側の adb だけを閉じる
-    if [ -n "$serial" ]; then
-      command "$adb_bin" -s "$serial" shell "$start_cmd" > "$tmp/start.out" 2>&1 < /dev/null &
+   sdk=$(adb shell getprop ro.build.version.sdk | tr -d '\r')
+    start_pid=
+    if [ "${sdk:-0}" -ge 24 ] 2>/dev/null; then
+      adb shell "cd $DIR && nohup ./loop.sh > $DIR/pcsc-rs.log 2>&1 < /dev/null &"
     else
-      command "$adb_bin" shell "$start_cmd" > "$tmp/start.out" 2>&1 < /dev/null &
+      start_cmd="cd $DIR && ./loop.sh > $DIR/pcsc-rs.log 2>&1 < /dev/null"
+      if [ -n "$serial" ]; then
+        command "$adb_bin" -s "$serial" shell "$start_cmd" > "$tmp/start.out" 2>&1 < /dev/null &
+      else
+        command "$adb_bin" shell "$start_cmd" > "$tmp/start.out" 2>&1 < /dev/null &
+      fi
+      start_pid=$!
     fi
-    start_pid=$!
+    # loop.pid ができたのを確かめる（遅い端末もあるので最大 30 秒）
     started=0
     i=0
-    while [ $i -lt 10 ]; do
-      sleep 1
+    while [ $i -lt 60 ]; do
+      sleep 0.5 2>/dev/null || sleep 1
       i=$((i + 1))
-      loop_pid=$(adb shell "cat $DIR/loop.pid 2>/dev/null; true" | tr -d '\r')
+      loop_pid=$(adb shell "cat $DIR/loop.pid 2>/dev/null; true" | tr -d '\r') || loop_pid=
       case "$loop_pid" in
         '' | *[!0-9]*) ;;
         *) started=1; break ;;
       esac
+      # loop.sh は終わらないので、adb が終わっていたら起動に失敗している
+      [ -z "$start_pid" ] || kill -0 "$start_pid" 2>/dev/null || break
     done
-    kill "$start_pid" 2>/dev/null || true
-    wait "$start_pid" 2>/dev/null || true
+    if [ -n "$start_pid" ]; then
+      kill "$start_pid" 2>/dev/null || true
+      wait "$start_pid" 2>/dev/null || true
+    fi
     if [ "$started" -ne 1 ]; then
       echo "起動できなかった（loop.pid ができなかった）" >&2
-      cat "$tmp/start.out" >&2 || true
+      echo "[adb]" >&2
+      cat "$tmp/start.out" >&2 2>/dev/null || true
+      echo "[device]" >&2
+      adb shell "ls -l $DIR" 2>&1 | tr -d '\r' >&2 || true
       remote_log 20 >&2 || true
       exit 1
     fi

@@ -23,6 +23,7 @@ mod battery;
 mod client;
 mod cmd;
 mod config;
+mod cpuinfo;
 mod gpu;
 mod io;
 #[cfg(all(target_os = "linux", target_arch = "arm", target_env = "musl"))]

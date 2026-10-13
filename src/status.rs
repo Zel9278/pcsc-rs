@@ -146,7 +146,7 @@ impl SystemStatus {
 
         let cpu = CpuData {
             model: cpu_model(system),
-            cpus: system.cpus().iter().map(Into::into).collect(),
+            cpus: cpu_cores(system),
         };
 
         let storages = storages(disks, io, *interval);
@@ -181,16 +181,44 @@ impl SystemStatus {
 }
 
 fn cpu_model(system: &System) -> String {
-    let model = system
+    let brand = system
         .cpus()
         .first()
         .map(|c| c.brand().trim().to_owned())
         .unwrap_or_default();
     #[cfg(any(target_os = "linux", target_os = "android"))]
-    if model.is_empty() {
-        return crate::android::cpu_model().unwrap_or(model);
+    {
+        // Krait 400 など、android.rs が SoC から割り出した名前
+        let hint = crate::android::cpu_model();
+        let model = crate::cpuinfo::model(&brand, hint.as_deref());
+        if !model.is_empty() {
+            return model;
+        }
+        if brand.is_empty() {
+            return hint.unwrap_or(brand);
+        }
     }
-    model
+    brand
+}
+
+/// Cores the kernel has taken offline (phones do this to save power) are not in
+/// sysinfo's list; show them as idle cores so a dual-core SoC does not look like one core.
+fn cpu_cores(system: &System) -> Vec<CoreData> {
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    {
+        let named: Vec<(String, f32)> = system
+            .cpus()
+            .iter()
+            .map(|c| (c.name().to_owned(), c.cpu_usage()))
+            .collect();
+        let total = crate::cpuinfo::possible_cores().unwrap_or(0);
+        crate::cpuinfo::spread_usage(&named, total)
+            .into_iter()
+            .map(|usage| CoreData { usage })
+            .collect()
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    system.cpus().iter().map(Into::into).collect()
 }
 
 fn storages(disks: &Disks, io: &io::Tracker, interval: Duration) -> Vec<StorageData> {
