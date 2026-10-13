@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.9.11...v0.10.0) (2026-10-13)
+
+
+### Features
+
+* ping ([5627757](https://github.com/SHINTRANET-Lab/pcsc-rs/commit/5627757837d144c99b5171d1452f6537fc995bc1))
+
 ## [0.9.11](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.9.10...v0.9.11) (2026-10-12)
 
 
