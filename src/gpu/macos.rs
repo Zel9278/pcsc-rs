@@ -1,5 +1,5 @@
 //! GPUs on macOS (Apple Silicon, Intel and AMD) from the `PerformanceStatistics`
-//! that each IOAccelerator publishes in the I/O Registry (`ioreg`).
+//! that each `IOAccelerator` publishes in the I/O Registry (`ioreg`).
 //!
 //! - Usage: `Device Utilization %`.
 //! - Memory: Apple Silicon (and Intel) GPUs share the system memory, so they report
@@ -134,7 +134,7 @@ fn parse(ioreg: &str) -> Vec<Accelerator> {
             continue;
         };
         match key {
-            "\"IOClass\"" => current.class = unquote(value).to_owned(),
+            "\"IOClass\"" => unquote(value).clone_into(&mut current.class),
             // A string, or data holding one: <"AMD Radeon Pro 5500M">
             "\"model\"" => {
                 let model = unquote(value.trim_start_matches('<').trim_end_matches('>'));
