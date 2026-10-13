@@ -302,6 +302,14 @@ fn platform() -> (String, String, Option<String>) {
             crate::android::device_name().or_else(System::host_name),
         );
     }
+    // DSM has no os-release, so sysinfo cannot name it
+    #[cfg(target_os = "linux")]
+    if let Some(version) = std::fs::read_to_string("/etc.defaults/VERSION")
+        .ok()
+        .and_then(|v| dsm_version(&v))
+    {
+        return ("Synology DSM".into(), version, System::host_name());
+    }
     #[cfg_attr(not(windows), allow(unused_mut))]
     let mut name = System::name().unwrap_or_else(|| "Unknown OS".into());
     #[cfg_attr(not(windows), allow(unused_mut))]
@@ -319,6 +327,27 @@ fn platform() -> (String, String, Option<String>) {
         name = product;
     }
     (name, version, System::host_name())
+}
+
+/// `7.2.2-72806 Update 3` from Synology's `/etc.defaults/VERSION` (`productversion="7.2.2"`,
+/// `buildnumber="72806"`, `smallfixnumber="3"`).
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn dsm_version(file: &str) -> Option<String> {
+    let value = |key: &str| {
+        file.lines().find_map(|line| {
+            let (k, v) = line.split_once('=')?;
+            let v = v.trim().trim_matches('"');
+            (k.trim() == key && !v.is_empty()).then(|| v.to_owned())
+        })
+    };
+    let mut version = value("productversion")?;
+    if let Some(build) = value("buildnumber") {
+        version = format!("{version}-{build}");
+    }
+    if let Some(fix) = value("smallfixnumber").filter(|f| f != "0") {
+        version = format!("{version} Update {fix}");
+    }
+    Some(version)
 }
 
 #[cfg(test)]
@@ -391,6 +420,19 @@ fn core_kinds(cores: &[Cpu]) -> Vec<cores::Kind> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn dsm_version() {
+        let file = "majorversion=\"7\"\nminorversion=\"2\"\nproductversion=\"7.2.2\"\n\
+                    buildphase=\"GM\"\nbuildnumber=\"72806\"\nsmallfixnumber=\"3\"\n";
+        assert_eq!(
+            super::dsm_version(file).as_deref(),
+            Some("7.2.2-72806 Update 3")
+        );
+        let fresh = "productversion=\"7.2.2\"\nbuildnumber=\"72806\"\nsmallfixnumber=\"0\"\n";
+        assert_eq!(super::dsm_version(fresh).as_deref(), Some("7.2.2-72806"));
+        assert_eq!(super::dsm_version("buildnumber=\"1\"\n"), None);
+    }
+
     #[test]
     fn storage_filters() {
         use std::ffi::OsStr;
