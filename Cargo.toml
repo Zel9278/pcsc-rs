@@ -52,7 +52,7 @@ thunk-rs = { version = "=0.3.5", optional = true, features = ["subsystem_windows
 winres = "=0.1.12"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_System_Power"] }
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_System_Performance", "Win32_System_Power", "Win32_System_SystemInformation"] }
 
 [target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
 libc = "=0.2.190"
