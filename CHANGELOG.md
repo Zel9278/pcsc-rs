@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.0](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.12.0...v0.13.0) (2026-10-13)
+
+
+### Features
+
+* max_mhz ([25e3878](https://github.com/SHINTRANET-Lab/pcsc-rs/commit/25e38786a8408e0273d49f47309e769118695b97))
+
 ## [0.12.0](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.11.1...v0.12.0) (2026-10-13)
 
 
