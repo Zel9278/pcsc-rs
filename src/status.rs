@@ -4,13 +4,13 @@
 
 use cfg_if::cfg_if;
 use serde::Serialize;
-use std::time::Duration;
+use std::{sync::OnceLock, time::Duration};
 
 use sysinfo::{Cpu, Disks, System};
 
 use crate::{
     battery::{self, BatteryData},
-    gpu, io,
+    cores, gpu, io,
     monitor::Sampler,
     thermal::{self, Temperature},
 };
@@ -22,6 +22,10 @@ pub struct CoreData {
     /// The kind of core (`Cortex-X4`), sent only where the cores differ
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) model: Option<String>,
+    /// Top frequency of the core's cpufreq policy, sent with `model` where known. With
+    /// it, cores of one design in separate clusters are told apart.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) max_mhz: Option<u32>,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -139,14 +143,17 @@ impl SystemStatus {
         }
 
         let cores = system.cpus();
-        let mixed = cores.iter().any(|c| c.brand() != cores[0].brand());
+        let kinds = core_kinds(cores);
+        let mixed = cores::group(&kinds).len() > 1;
         let cpu = CpuData {
-            model: cpu_model(cores.iter().map(Cpu::brand)),
+            model: cores::model(&kinds),
             cpus: cores
                 .iter()
-                .map(|c| CoreData {
-                    usage: c.cpu_usage(),
-                    model: mixed.then(|| c.brand().to_owned()),
+                .zip(&kinds)
+                .map(|(core, kind)| CoreData {
+                    usage: core.cpu_usage(),
+                    model: mixed.then(|| kind.name.clone()),
+                    max_mhz: kind.max_mhz.filter(|_| mixed),
                 })
                 .collect(),
         };
@@ -327,10 +334,12 @@ pub(crate) fn sample() -> SystemStatus {
                 CoreData {
                     usage: 12.5,
                     model: None,
+                    max_mhz: None,
                 },
                 CoreData {
                     usage: 50.0,
                     model: Some("Cortex-X4".into()),
+                    max_mhz: Some(2803),
                 },
             ],
         },
@@ -368,46 +377,20 @@ pub(crate) fn sample() -> SystemStatus {
     }
 }
 
-/// The CPU's name. Where the cores differ (ARM's big.LITTLE, which sysinfo names per
-/// core from `CPU part`), each kind with its count, in core order:
-/// `3× Cortex-A520 + 4× Cortex-A720 + 1× Cortex-X4`.
-fn cpu_model<'a>(brands: impl Iterator<Item = &'a str>) -> String {
-    let mut kinds: Vec<(&str, usize)> = Vec::new();
-    for brand in brands {
-        match kinds.iter_mut().find(|(b, _)| *b == brand) {
-            Some((_, count)) => *count += 1,
-            None => kinds.push((brand, 1)),
-        }
-    }
-    match kinds.as_slice() {
-        [] => String::new(),
-        [(brand, _)] => (*brand).to_owned(),
-        _ => kinds
-            .iter()
-            .map(|(brand, count)| format!("{count}× {brand}"))
-            .collect::<Vec<_>>()
-            .join(" + "),
+/// The kinds of core, which do not change while the client runs.
+fn core_kinds(cores: &[Cpu]) -> Vec<cores::Kind> {
+    static KINDS: OnceLock<Vec<cores::Kind>> = OnceLock::new();
+    let kinds =
+        KINDS.get_or_init(|| cores::per_core(&cores.iter().map(Cpu::brand).collect::<Vec<_>>()));
+    if kinds.len() == cores.len() {
+        kinds.clone()
+    } else {
+        cores::per_core(&cores.iter().map(Cpu::brand).collect::<Vec<_>>())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn cpu_model() {
-        use super::cpu_model;
-        let phone = ["Cortex-A520"; 3]
-            .into_iter()
-            .chain(["Cortex-A720"; 4])
-            .chain(["Cortex-X4"]);
-        assert_eq!(
-            cpu_model(phone),
-            "3× Cortex-A520 + 4× Cortex-A720 + 1× Cortex-X4"
-        );
-        let pc = ["Intel(R) Core(TM) i7-11800H @ 2.30GHz"; 16].into_iter();
-        assert_eq!(cpu_model(pc), "Intel(R) Core(TM) i7-11800H @ 2.30GHz");
-        assert_eq!(cpu_model(std::iter::empty()), "");
-    }
-
     #[test]
     fn storage_filters() {
         use std::ffi::OsStr;
@@ -428,7 +411,7 @@ mod tests {
                 "_os": "Arch Linux rolling",
                 "hostname": "host",
                 "version": "Rust client test",
-                "cpu": { "model": "cpu", "cpus": [{ "cpu": 12.5 }, { "cpu": 50.0, "model": "Cortex-X4" }] },
+                "cpu": { "model": "cpu", "cpus": [{ "cpu": 12.5 }, { "cpu": 50.0, "model": "Cortex-X4", "max_mhz": 2803 }] },
                 "ram": { "free": 1, "total": 2 },
                 "swap": { "free": 0, "total": 0 },
                 "storages": [{ "name": "/dev/sda1", "free": 3, "total": 4, "read": 1024, "written": 2048, "busy": 12.5 }],
