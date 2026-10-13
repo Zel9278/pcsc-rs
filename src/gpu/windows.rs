@@ -2,14 +2,18 @@
 //! performance counters, the ones Task Manager shows. The adapters (names, VRAM)
 //! come from DXGI and are matched to the counters by their LUID.
 //!
-//! - Usage: per adapter, the busiest kind of engine (3D, Copy, VideoDecode, …),
+//! - Usage: per adapter, the busiest kind of engine (`3D`, `Copy`, `VideoDecode`, …),
 //!   summed over the processes using it, as Task Manager does.
 //! - Memory: dedicated VRAM; GPUs with little or no VRAM of their own (integrated)
 //!   report what they use of the system memory, against the whole of it.
 //!
 //! Counter rates need two samples, so the first sample reports every GPU as idle.
 
-use std::{collections::HashMap, ptr, sync::Mutex};
+use std::{
+    collections::HashMap,
+    ptr,
+    sync::{Mutex, OnceLock},
+};
 
 use windows_sys::Win32::System::{
     Performance::{
@@ -30,31 +34,28 @@ const NVIDIA: u32 = 0x10de;
 const MICROSOFT: u32 = 0x1414;
 
 pub fn get_info(skip_nvidia: bool) -> Vec<GpuData> {
-    static ADAPTERS: Mutex<Option<Vec<Adapter>>> = Mutex::new(None);
-    static COUNTERS: Mutex<Option<Option<Counters>>> = Mutex::new(None);
+    static ADAPTERS: OnceLock<Vec<Adapter>> = OnceLock::new();
+    // Opened once; when that fails (counters disabled), not tried again
+    static COUNTERS: OnceLock<Option<Mutex<Counters>>> = OnceLock::new();
 
-    let adapters = {
-        let mut adapters = ADAPTERS
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        adapters.get_or_insert_with(dxgi::adapters).clone()
-    };
-    let adapters: Vec<Adapter> = adapters
-        .into_iter()
+    let adapters: Vec<&Adapter> = ADAPTERS
+        .get_or_init(dxgi::adapters)
+        .iter()
         .filter(|a| a.vendor != MICROSOFT && !(skip_nvidia && a.vendor == NVIDIA))
         .collect();
     if adapters.is_empty() {
         return Vec::new();
     }
 
-    let mut counters = COUNTERS
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    // Opened once; when that fails (counters disabled), not tried again
-    let sample = counters
-        .get_or_insert_with(Counters::open)
+    let sample = COUNTERS
+        .get_or_init(|| Counters::open().map(Mutex::new))
         .as_ref()
-        .map(Counters::sample)
+        .map(|counters| {
+            counters
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .sample()
+        })
         .unwrap_or_default();
     let ram_mib = ram_mib();
 
@@ -90,7 +91,7 @@ fn ram_mib() -> Option<u64> {
     let mut status: MEMORYSTATUSEX = unsafe { std::mem::zeroed() };
     status.dwLength = u32::try_from(size_of::<MEMORYSTATUSEX>()).ok()?;
     // SAFETY: the pointer is to a MEMORYSTATUSEX with its length set, alive for the call
-    (unsafe { GlobalMemoryStatusEx(&raw mut status) } != 0).then(|| status.ullTotalPhys / MIB)
+    (unsafe { GlobalMemoryStatusEx(&raw mut status) } != 0).then_some(status.ullTotalPhys / MIB)
 }
 
 /// An adapter's LUID as the counters' instance names write it: (high part, low part).
@@ -278,7 +279,7 @@ mod dxgi {
     #[repr(C)]
     struct Guid(u32, u16, u16, [u8; 8]);
 
-    const IID_IDXGI_FACTORY1: Guid = Guid(
+    static IID_IDXGI_FACTORY1: Guid = Guid(
         0x770a_ae78,
         0xf26f,
         0x4dba,
@@ -286,7 +287,7 @@ mod dxgi {
     );
     const DXGI_ADAPTER_FLAG_SOFTWARE: u32 = 2;
 
-    /// DXGI_ADAPTER_DESC1
+    /// `DXGI_ADAPTER_DESC1`
     #[repr(C)]
     struct AdapterDesc {
         description: [u16; 128],
@@ -309,9 +310,9 @@ mod dxgi {
 
     // Slots in the COM vtables
     const RELEASE: usize = 2;
-    /// IDXGIFactory1::EnumAdapters1
+    /// `IDXGIFactory1::EnumAdapters1`
     const ENUM_ADAPTERS1: usize = 12;
-    /// IDXGIAdapter1::GetDesc1
+    /// `IDXGIAdapter1::GetDesc1`
     const GET_DESC1: usize = 10;
 
     type Release = unsafe extern "system" fn(*mut c_void) -> u32;
