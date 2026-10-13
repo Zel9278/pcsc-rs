@@ -8,6 +8,10 @@
 //!   report what they use of the system memory, against the whole of it.
 //!
 //! Counter rates need two samples, so the first sample reports every GPU as idle.
+//!
+//! Virtual displays (Parsec, `DisplayLink`, …) are indirect display adapters, which DXGI
+//! lists under the name and IDs of the GPU that draws for them; the kernel's adapter
+//! type tells them apart, and they are left out.
 
 use std::{
     collections::HashMap,
@@ -285,6 +289,8 @@ mod dxgi {
         0x4dba,
         [0xa8, 0x29, 0x25, 0x3c, 0x83, 0xd1, 0xb3, 0x87],
     );
+    /// DXGI's software renderer, and Remote Desktop's adapter
+    const DXGI_ADAPTER_FLAG_REMOTE: u32 = 1;
     const DXGI_ADAPTER_FLAG_SOFTWARE: u32 = 2;
 
     /// `DXGI_ADAPTER_DESC1`
@@ -329,7 +335,56 @@ mod dxgi {
         }
     }
 
-    /// The hardware adapters, without DXGI's software renderer.
+    /// False for adapters that only show a display: indirect display adapters (virtual
+    /// displays, docks) and others that can neither render nor compute. True when the
+    /// kernel cannot tell.
+    fn is_gpu(luid_low: u32, luid_high: i32) -> bool {
+        use windows_sys::{
+            Wdk::Graphics::Direct3D::{
+                D3DKMT_CLOSEADAPTER, D3DKMT_OPENADAPTERFROMLUID, D3DKMT_QUERYADAPTERINFO,
+                D3DKMTCloseAdapter, D3DKMTOpenAdapterFromLuid, D3DKMTQueryAdapterInfo,
+                KMTQAITYPE_ADAPTERTYPE,
+            },
+            Win32::Foundation::LUID,
+        };
+        // Bits of D3DKMT_ADAPTERTYPE
+        const RENDER_SUPPORTED: u32 = 1 << 0;
+        const SOFTWARE_DEVICE: u32 = 1 << 2;
+        const INDIRECT_DISPLAY_DEVICE: u32 = 1 << 6;
+        const COMPUTE_ONLY: u32 = 1 << 11;
+
+        let mut open = D3DKMT_OPENADAPTERFROMLUID {
+            AdapterLuid: LUID {
+                LowPart: luid_low,
+                HighPart: luid_high,
+            },
+            hAdapter: 0,
+        };
+        // SAFETY: the struct lives for the call
+        if unsafe { D3DKMTOpenAdapterFromLuid(&raw mut open) } < 0 {
+            return true;
+        }
+        let mut kind = 0u32;
+        let mut query = D3DKMT_QUERYADAPTERINFO {
+            hAdapter: open.hAdapter,
+            Type: KMTQAITYPE_ADAPTERTYPE,
+            pPrivateDriverData: (&raw mut kind).cast(),
+            PrivateDriverDataSize: 4,
+        };
+        // SAFETY: the query points at a u32, the size of D3DKMT_ADAPTERTYPE, alive for the call
+        let known = unsafe { D3DKMTQueryAdapterInfo(&raw mut query) } >= 0;
+        let close = D3DKMT_CLOSEADAPTER {
+            hAdapter: open.hAdapter,
+        };
+        // SAFETY: closes the handle opened above
+        unsafe { D3DKMTCloseAdapter(&raw const close) };
+        !known
+            || (kind & (INDIRECT_DISPLAY_DEVICE | SOFTWARE_DEVICE) == 0
+                && kind & (RENDER_SUPPORTED | COMPUTE_ONLY) != 0)
+    }
+
+    /// The hardware adapters, without DXGI's software renderer, Remote Desktop's adapter
+    /// and display-only adapters.
     pub fn adapters() -> Vec<Adapter> {
         let mut factory: *mut c_void = ptr::null_mut();
         // SAFETY: the IID matches the interface asked for; the out pointer is local
@@ -352,7 +407,8 @@ mod dxgi {
                 let get_desc: GetDesc1 = method(adapter, GET_DESC1);
                 let mut desc: AdapterDesc = std::mem::zeroed();
                 if get_desc(adapter, &raw mut desc) >= 0
-                    && desc.flags & DXGI_ADAPTER_FLAG_SOFTWARE == 0
+                    && desc.flags & (DXGI_ADAPTER_FLAG_REMOTE | DXGI_ADAPTER_FLAG_SOFTWARE) == 0
+                    && is_gpu(desc.luid_low, desc.luid_high)
                 {
                     let len = desc.description.iter().position(|&c| c == 0).unwrap_or(128);
                     adapters.push(Adapter {
