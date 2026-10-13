@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.8.0](https://github.com/Zel9278/pcsc-rs/compare/v2.7.0...v2.8.0) (2026-10-13)
+
+
+### Features
+
+* name Proxmox VE and Proxmox Backup Server hosts ([#690](https://github.com/Zel9278/pcsc-rs/issues/690)) ([4da3af3](https://github.com/Zel9278/pcsc-rs/commit/4da3af3c502bf9668991b43cdab4367d9bf33856))
+* top frequency for every CPU, and a Synology NAS install script ([#692](https://github.com/Zel9278/pcsc-rs/issues/692)) ([a26b12e](https://github.com/Zel9278/pcsc-rs/commit/a26b12ebf127565d70b61bb2a5299b9aa22d2c8b))
+
 ## [2.7.0](https://github.com/Zel9278/pcsc-rs/compare/v2.6.2...v2.7.0) (2026-10-13)
 
 
