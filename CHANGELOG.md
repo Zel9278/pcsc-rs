@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.7.0](https://github.com/Zel9278/pcsc-rs/compare/v2.6.2...v2.7.0) (2026-10-13)
+
+
+### Features
+
+* report Intel and AMD GPUs on Linux, Windows and macOS ([#686](https://github.com/Zel9278/pcsc-rs/issues/686)) ([68aa515](https://github.com/Zel9278/pcsc-rs/commit/68aa51533ae71da602b6095b135a4deda3b52358))
+
 ## [2.6.2](https://github.com/Zel9278/pcsc-rs/compare/v2.6.1...v2.6.2) (2026-10-13)
 
 
