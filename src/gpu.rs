@@ -1,5 +1,7 @@
-//! GPU usage: NVIDIA through `nvidia-smi`, and phone GPUs (Qualcomm Adreno,
-//! Samsung's Mali / Xclipse) through sysfs. Anything unexpected means "no GPU".
+//! GPU usage: NVIDIA through `nvidia-smi`; AMD and Intel through sysfs on Linux
+//! ([`drm`]), the GPU performance counters on Windows ([`windows`]) and the I/O Registry on
+//! macOS ([`macos`]); phone GPUs (Qualcomm Adreno, Samsung's Mali / Xclipse)
+//! through sysfs. Anything unexpected means "no GPU".
 
 use std::{
     process::Command,
@@ -9,12 +11,31 @@ use std::{
 
 use crate::status::{GpuData, GpuMemory};
 
+#[cfg(any(target_os = "linux", target_os = "android"))]
+mod drm;
+#[cfg(target_os = "macos")]
+mod macos;
+// XP has neither the GPU performance counters nor DXGI
+#[cfg(all(target_os = "windows", not(feature = "xp")))]
+mod windows;
+
 pub fn get_info() -> Vec<GpuData> {
-    let gpus = nvidia();
+    #[allow(unused_mut)]
+    let mut gpus = nvidia();
     #[cfg(any(target_os = "linux", target_os = "android"))]
-    if gpus.is_empty() {
-        return mobile::get_info().into_iter().collect();
+    {
+        if !crate::android::is_android() {
+            gpus.extend(drm::get_info());
+        }
+        if gpus.is_empty() {
+            return mobile::get_info().into_iter().collect();
+        }
     }
+    // The counters cover NVIDIA's GPUs too; nvidia-smi's figures (with the temperature) win
+    #[cfg(all(target_os = "windows", not(feature = "xp")))]
+    gpus.extend(windows::get_info(!gpus.is_empty()));
+    #[cfg(target_os = "macos")]
+    gpus.extend(macos::get_info());
     gpus
 }
 
