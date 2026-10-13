@@ -144,11 +144,7 @@ impl SystemStatus {
         }
 
         let cpu = CpuData {
-            model: system
-                .cpus()
-                .first()
-                .map(|c| c.brand().to_owned())
-                .unwrap_or_default(),
+            model: cpu_model(system.cpus().iter().map(Cpu::brand)),
             cpus: system.cpus().iter().map(Into::into).collect(),
         };
 
@@ -360,8 +356,46 @@ pub(crate) fn sample() -> SystemStatus {
     }
 }
 
+/// The CPU's name. Where the cores differ (ARM's big.LITTLE, which sysinfo names per
+/// core from `CPU part`), each kind with its count, in core order:
+/// `3× Cortex-A520 + 4× Cortex-A720 + 1× Cortex-X4`.
+fn cpu_model<'a>(brands: impl Iterator<Item = &'a str>) -> String {
+    let mut kinds: Vec<(&str, usize)> = Vec::new();
+    for brand in brands {
+        match kinds.iter_mut().find(|(b, _)| *b == brand) {
+            Some((_, count)) => *count += 1,
+            None => kinds.push((brand, 1)),
+        }
+    }
+    match kinds.as_slice() {
+        [] => String::new(),
+        [(brand, _)] => (*brand).to_owned(),
+        _ => kinds
+            .iter()
+            .map(|(brand, count)| format!("{count}× {brand}"))
+            .collect::<Vec<_>>()
+            .join(" + "),
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn cpu_model() {
+        use super::cpu_model;
+        let phone = ["Cortex-A520"; 3]
+            .into_iter()
+            .chain(["Cortex-A720"; 4])
+            .chain(["Cortex-X4"]);
+        assert_eq!(
+            cpu_model(phone),
+            "3× Cortex-A520 + 4× Cortex-A720 + 1× Cortex-X4"
+        );
+        let pc = ["Intel(R) Core(TM) i7-11800H @ 2.30GHz"; 16].into_iter();
+        assert_eq!(cpu_model(pc), "Intel(R) Core(TM) i7-11800H @ 2.30GHz");
+        assert_eq!(cpu_model(std::iter::empty()), "");
+    }
+
     #[test]
     fn storage_filters() {
         use std::ffi::OsStr;
