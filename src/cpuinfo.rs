@@ -1,7 +1,7 @@
 //! A more useful CPU description than sysinfo's `brand()` on ARM (where it is empty or
 //! "ARMv7 Processor rev 4"), and the real core count when the kernel takes cores offline.
 //!
-//! * model: `<SoC> (4x Cortex-A55 + 4x Cortex-A75)`, from the SoC name (Android properties,
+//! * model: `<SoC> (4× Corte×-A55 + 4× Corte×-A75)`, from the SoC name (Android properties,
 //!   device tree, `/sys/devices/soc0`) and the CPU implementer/part of every core.
 //! * cores: `/sys/devices/system/cpu/possible` counts cores that are currently offline too.
 //!   Phones power cores down (hotplug); `/proc/stat` and `/proc/cpuinfo` then list only the
@@ -146,7 +146,7 @@ fn core_name(implementer: u32, part: u32) -> Option<&'static str> {
     })
 }
 
-/// `4x Cortex-A55 + 4x Cortex-A75`, the cores found most (and the fastest first when
+/// `4× Corte×-A55 + 4× Corte×-A75`, the cores found most (and the fastest first when
 /// frequencies are known) listed first. `None` when no core has an implementer/part.
 fn layout(
     cores: &[CoreInfo],
@@ -182,7 +182,7 @@ fn layout(
                 .map(str::to_owned)
                 .or_else(|| core_name(*i, *p).map(str::to_owned))
                 .unwrap_or_else(|| format!("0x{i:02x}:0x{p:03x}"));
-            format!("{n}x {name}")
+            format!("{n}× {name}")
         })
         .collect();
     Some(parts.join(" + "))
@@ -472,12 +472,12 @@ mod tests {
         let freq = BTreeMap::from([(0, 1_800_000), (1, 1_800_000), (4, 2_840_000)]);
         assert_eq!(
             layout(&cores, &freq, None).unwrap(),
-            "1x Cortex-A76 + 2x Cortex-A55"
+            "1× Corte×-A76 + 2× Corte×-A55"
         );
         // Without frequencies the part ID decides
         assert_eq!(
             layout(&cores, &BTreeMap::new(), None).unwrap(),
-            "1x Cortex-A76 + 2x Cortex-A55"
+            "1× Corte×-A76 + 2× Corte×-A55"
         );
     }
 
@@ -489,7 +489,7 @@ mod tests {
         assert_eq!(cores.len(), 4);
         assert_eq!(
             layout(&cores, &BTreeMap::new(), Some("Krait 400")).unwrap(),
-            "4x Krait 400"
+            "4× Krait 400"
         );
     }
 
@@ -501,7 +501,7 @@ mod tests {
         assert_eq!(cores.len(), 2);
         assert_eq!(
             layout(&cores, &BTreeMap::new(), None).unwrap(),
-            "2x Cortex-A9"
+            "2× Corte×-A9"
         );
     }
 
@@ -512,12 +512,12 @@ mod tests {
         );
         assert_eq!(
             layout(&krait, &BTreeMap::new(), Some("Krait 400")).unwrap(),
-            "2x Krait 400"
+            "2× Krait 400"
         );
         let mixed = parse_cpuinfo(SD855);
         assert_eq!(
             layout(&mixed, &BTreeMap::new(), Some("Krait 400")).unwrap(),
-            "1x Cortex-A76 + 2x Cortex-A55"
+            "1× Corte×-A76 + 2× Corte×-A55"
         );
     }
 
@@ -620,10 +620,10 @@ mod tests {
     #[test]
     fn compose_names() {
         assert_eq!(
-            compose(Some("Raspberry Pi 4"), Some("4x Cortex-A72")).unwrap(),
-            "4x Cortex-A72 (Raspberry Pi 4)"
+            compose(Some("Raspberry Pi 4"), Some("4× Corte×-A72")).unwrap(),
+            "4× Corte×-A72 (Raspberry Pi 4)"
         );
-        assert_eq!(compose(None, Some("2x Cortex-A9")).unwrap(), "2x Cortex-A9");
+        assert_eq!(compose(None, Some("2× Corte×-A9")).unwrap(), "2× Corte×-A9");
         assert!(compose(None, None).is_none());
     }
 }
