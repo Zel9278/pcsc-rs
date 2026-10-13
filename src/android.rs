@@ -21,7 +21,7 @@ pub fn is_android() -> bool {
     *ANDROID.get_or_init(|| Path::new(GETPROP).exists())
 }
 
-fn getprop(key: &str) -> Option<String> {
+pub(crate) fn getprop(key: &str) -> Option<String> {
     let output = crate::cmd::run(Command::new(GETPROP).arg(key)).ok()?;
     let value = output.stdout.trim().to_owned();
     (!value.is_empty()).then_some(value)
