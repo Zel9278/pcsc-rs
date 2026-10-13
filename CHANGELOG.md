@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.11.1...v0.12.0) (2026-10-13)
+
+
+### Features
+
+* name Proxmox VE and Proxmox Backup Server hosts ([#690](https://github.com/SHINTRANET-Lab/pcsc-rs/issues/690)) ([88a9bba](https://github.com/SHINTRANET-Lab/pcsc-rs/commit/88a9bbac16ad2137e03d68b8294887987cd1932a))
+
 ## [0.11.1](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.11.0...v0.11.1) (2026-10-13)
 
 
