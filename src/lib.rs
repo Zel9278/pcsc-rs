@@ -23,6 +23,7 @@ mod battery;
 mod client;
 mod cmd;
 mod config;
+mod cores;
 mod gpu;
 mod io;
 mod monitor;
