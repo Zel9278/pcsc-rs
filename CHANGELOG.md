@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.2](https://github.com/Zel9278/pcsc-rs/compare/v2.6.1...v2.6.2) (2026-10-13)
+
+
+### Bug Fixes
+
+* group and name each kind of core on CPUs with mixed cores ([#684](https://github.com/Zel9278/pcsc-rs/issues/684)) ([6a41192](https://github.com/Zel9278/pcsc-rs/commit/6a41192350c07fc694234169c5c1f4601fd449b6))
+
 ## [2.6.1](https://github.com/Zel9278/pcsc-rs/compare/v2.6.0...v2.6.1) (2026-10-11)
 
 
