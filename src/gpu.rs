@@ -155,7 +155,7 @@ mod mobile {
     /// `dumpsys` takes a few tens of milliseconds; once in a while is enough
     const MEMORY_INTERVAL: Duration = Duration::from_secs(5);
 
-        pub fn get_info() -> Option<GpuData> {
+    pub fn get_info() -> Option<GpuData> {
         let (name, usage) = adreno()
             .or_else(samsung)
             .or_else(mediatek_mali)
@@ -232,7 +232,7 @@ mod mobile {
         }
         None
     }
-        /// GPU name from SurfaceFlinger (`GLES: Qualcomm, Adreno (TM) 640, …` → `Adreno 640`).
+    /// GPU name from SurfaceFlinger (`GLES: Qualcomm, Adreno (TM) 640, …` → `Adreno 640`).
     /// Read once: the dump is large and the GPU does not change.
     fn renderer_name() -> Option<String> {
         static NAME: OnceLock<Option<String>> = OnceLock::new();
@@ -387,7 +387,7 @@ mod tests {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     #[test]
     fn adreno() {
-        use super::mobile::{global_total, mem_total_kib, name, percent, usage, gles_renderer};
+        use super::mobile::{gles_renderer, global_total, mem_total_kib, name, percent, usage};
         assert_eq!(
             usage("  23464 1006294"),
             Some(23464.0 / 1_006_294.0 * 100.0)
@@ -414,7 +414,7 @@ mod tests {
             mem_total_kib("MemTotal:       11629912 kB\nMemFree:  1 kB\n"),
             Some(11_629_912)
         );
-                assert_eq!(
+        assert_eq!(
             gles_renderer("GLES: Qualcomm, Adreno (TM) 640, OpenGL ES 3.2 V@415.0\n").as_deref(),
             Some("Adreno 640")
         );
