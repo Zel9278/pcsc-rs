@@ -205,18 +205,20 @@ LOOP
     adb shell "cd $DIR && : > pcsc-rs.log"
 
    sdk=$(adb shell getprop ro.build.version.sdk | tr -d '\r')
-    start_pid=
+    redirect="> $DIR/pcsc-rs.log 2>&1 < /dev/null"
     if [ "${sdk:-0}" -ge 24 ] 2>/dev/null; then
-            adb shell "cd $DIR || exit 1; nohup ./loop.sh > $DIR/pcsc-rs.log 2>&1 < /dev/null &"
+      modern=1
+      start_cmd="cd $DIR || exit 1; if command -v setsid >/dev/null 2>&1; then setsid nohup ./loop.sh $redirect & else nohup ./loop.sh $redirect & fi"
     else
-      start_cmd="cd $DIR && ./loop.sh > $DIR/pcsc-rs.log 2>&1 < /dev/null"
-      if [ -n "$serial" ]; then
-        command "$adb_bin" -s "$serial" shell "$start_cmd" > "$tmp/start.out" 2>&1 < /dev/null &
-      else
-        command "$adb_bin" shell "$start_cmd" > "$tmp/start.out" 2>&1 < /dev/null &
-      fi
-      start_pid=$!
+      modern=0
+      start_cmd="cd $DIR && ./loop.sh $redirect"
     fi
+    if [ -n "$serial" ]; then
+      command "$adb_bin" -s "$serial" shell "$start_cmd" > "$tmp/start.out" 2>&1 < /dev/null &
+    else
+      command "$adb_bin" shell "$start_cmd" > "$tmp/start.out" 2>&1 < /dev/null &
+    fi
+    start_pid=$!
     # loop.pid ができたのを確かめる（遅い端末もあるので最大 30 秒）
     started=0
     i=0
@@ -228,13 +230,13 @@ LOOP
         '' | *[!0-9]*) ;;
         *) started=1; break ;;
       esac
-      # loop.sh は終わらないので、adb が終わっていたら起動に失敗している
-      [ -z "$start_pid" ] || kill -0 "$start_pid" 2>/dev/null || break
+      # 古い端末の loop.sh は終わらないので、adb が終わっていたら起動に失敗している。
+      # Android 7 以降は、起動し終えたシェルが終わるのが普通
+      [ "$modern" -eq 1 ] || kill -0 "$start_pid" 2>/dev/null || break
     done
-    if [ -n "$start_pid" ]; then
-      kill "$start_pid" 2>/dev/null || true
-      wait "$start_pid" 2>/dev/null || true
-    fi
+    # PC 側の adb だけを閉じる（端末の loop.sh は動き続ける）
+    kill "$start_pid" 2>/dev/null || true
+    wait "$start_pid" 2>/dev/null || true
     if [ "$started" -ne 1 ]; then
       echo "起動できなかった（loop.pid ができなかった）" >&2
       echo "[adb]" >&2

@@ -71,23 +71,26 @@ function Invoke-Remote([string]$RemoteCommand) {
 function Start-RemoteLoop {
     $sdk = 0
     [void][int]::TryParse((((Invoke-Remote "getprop ro.build.version.sdk") -join "") -replace "\D", ""), [ref]$sdk)
-    $proc = $null
+    $modern = $sdk -ge 24
+    $redirect = "> $Dir/pcsc-rs.log 2>&1 < /dev/null"
+    if ($modern) {
+        # Android 7+: start it in the background, in a session of its own (setsid), so that
+        # closing adb cannot take it down. Not every adbd lets `adb shell` return even then,
+        # so adb is run as a child process below and closed once loop.pid exists.
+        $remote = "cd $Dir || exit 1; if command -v setsid >/dev/null 2>&1; then setsid nohup ./loop.sh $redirect & else nohup ./loop.sh $redirect & fi"
+    } else {
+        # Older: loop.sh runs in the foreground of adb (no background child for Android 5.0's
+        # adbd to wait for, and no nohup, which 2.3 / 4.0 lack; loop.sh ignores SIGHUP itself).
+        $remote = "cd $Dir && ./loop.sh $redirect"
+    }
     $outFile = Join-Path ([IO.Path]::GetTempPath()) ("pcsc-rs-adb-" + [Guid]::NewGuid().ToString("n"))
     $errFile = "$outFile.err"
+    $proc = $null
     try {
-        if ($sdk -ge 24) {
-            # Android 7+: the shell returns at once, and toybox has nohup.
-            Invoke-Remote "cd $Dir && nohup ./loop.sh > $Dir/pcsc-rs.log 2>&1 < /dev/null &" | Out-Null
-        } else {
-            # Older: no background child (Android 5.0's adbd would keep `adb shell` open for it),
-            # and no nohup (2.3 / 4.0 have none; loop.sh ignores SIGHUP itself). loop.sh runs in
-            # the foreground of this adb.exe, which is closed once loop.pid exists.
-            $adbExe = (Get-Command $Adb).Source
-            $remote = "cd $Dir && ./loop.sh > $Dir/pcsc-rs.log 2>&1 < /dev/null"
-            $argLine = (@($SerialArgs) + @("shell", ('"' + $remote + '"'))) -join " "
-            $proc = Start-Process -FilePath $adbExe -ArgumentList $argLine -PassThru -WindowStyle Hidden `
-                -RedirectStandardOutput $outFile -RedirectStandardError $errFile
-        }
+        $adbExe = (Get-Command $Adb).Source
+        $argLine = (@($SerialArgs) + @("shell", ('"' + $remote + '"'))) -join " "
+        $proc = Start-Process -FilePath $adbExe -ArgumentList $argLine -PassThru -WindowStyle Hidden `
+            -RedirectStandardOutput $outFile -RedirectStandardError $errFile
         $started = $false
         for ($attempt = 0; $attempt -lt 60; $attempt++) {
             Start-Sleep -Milliseconds 500
@@ -97,8 +100,9 @@ function Start-RemoteLoop {
                 $text = ""
             }
             if ($text) { $started = $true; break }
-            # The loop never ends, so an adb that has exited means it failed to start
-            if ($proc -and $proc.HasExited) { break }
+            # An older loop never ends, so an adb that has exited means it failed to start.
+            # On Android 7+ the shell returns once it has started the loop.
+            if (-not $modern -and $proc.HasExited) { break }
         }
         if (-not $started) {
             $hostOut = @(Get-Content -LiteralPath $outFile, $errFile -ErrorAction SilentlyContinue) -join "`n"
@@ -106,6 +110,7 @@ function Start-RemoteLoop {
             throw "Remote client did not start (loop.pid was not created).`n[adb]`n$hostOut`n[device]`n$device"
         }
     } finally {
+        # Close only the adb on this PC; the loop on the phone keeps running
         if ($proc -and -not $proc.HasExited) { $proc.Kill() }
         Remove-Item -LiteralPath $outFile, $errFile -ErrorAction SilentlyContinue
     }
