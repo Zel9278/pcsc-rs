@@ -182,7 +182,8 @@ mod mobile {
             .or_else(mediatek_mali)
             .or_else(generic_mali)
             .or_else(powervr)
-            .or_else(tegra)?;
+            .or_else(tegra)
+            .or_else(name_only)?;
         // 汎用名（"Arm Mali" など）しか分からないときは、GLES の名前に置き換える
         let name = if matches!(
             name.as_str(),
@@ -228,11 +229,23 @@ mod mobile {
         ))
     }
     fn mediatek_mali() -> Option<(String, f64)> {
-        let busy = fs::read_to_string("/sys/kernel/ged/hal/total_gpu_utilization").ok()?;
-        Some((
-            "MediaTek".into(),
-            busy.trim().parse::<f64>().ok()?.clamp(0.0, 100.0),
-        ))
+        // `gpu_utilization` is "<active> <block> <idle>" in percent (`0 0 100`); some kernels
+        // only have `total_gpu_utilization` (one number). Root only: closed to the shell user.
+        let busy = fs::read_to_string("/sys/kernel/ged/hal/gpu_utilization")
+            .or_else(|_| fs::read_to_string("/sys/kernel/ged/hal/total_gpu_utilization"))
+            .ok()?;
+        Some(("MediaTek".into(), first_percent(&busy)?))
+    }
+
+    /// The first number of the text, as a percentage.
+    pub(super) fn first_percent(text: &str) -> Option<f64> {
+        Some(
+            text.split_whitespace()
+                .next()?
+                .parse::<f64>()
+                .ok()?
+                .clamp(0.0, 100.0),
+        )
     }
     fn generic_mali() -> Option<(String, f64)> {
         let raw_val = fs::read_to_string("/sys/class/misc/mali0/device/utilization")
@@ -379,6 +392,9 @@ mod mobile {
         *last = Some((now, on_ms));
         Some(("ULP GeForce (Tegra)".to_owned(), usage))
     }
+    fn name_only() -> Option<(String, f64)> {
+        Some((renderer_name()?, 0.0))
+    }
 }
 
 #[cfg(test)]
@@ -439,6 +455,9 @@ mod tests {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     #[test]
     fn adreno() {
+        use super::mobile::{
+            first_percent, gles_renderer, global_total, mem_total_kib, name, percent, usage,
+        };
         use super::mobile::{gles_renderer, global_total, mem_total_kib, name, percent, usage};
         assert_eq!(
             usage("  23464 1006294"),
@@ -475,5 +494,9 @@ mod tests {
             Some("Mali-G78 MC10")
         );
         assert_eq!(gles_renderer("nothing"), None);
+        assert_eq!(first_percent("0 0 100\n"), Some(0.0));
+        assert_eq!(first_percent("35 20 45"), Some(35.0));
+        assert_eq!(first_percent("42"), Some(42.0));
+        assert_eq!(first_percent("x"), None);
     }
 }
