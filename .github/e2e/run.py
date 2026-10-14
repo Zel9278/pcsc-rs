@@ -180,6 +180,7 @@ async def run(args):
             "version": last.get("version"),
             "cpu": cpu.get("model"),
             "cores": len(cpu.get("cpus") or []),
+            "max_mhz": sorted({c["max_mhz"] for c in cpu.get("cpus") or [] if "max_mhz" in c}),
             "gpus": last.get("gpus"),
         }
         print(json.dumps(summary, indent=1, ensure_ascii=False))
