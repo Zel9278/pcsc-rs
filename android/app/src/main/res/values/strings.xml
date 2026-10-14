@@ -77,11 +77,14 @@
     <string name="hide_restart">Press Restart for a change to take effect</string>
     <string name="hide_os">OS name and version</string>
     <string name="hide_cpu">CPU usage</string>
-    <string name="hide_cpu_model">CPU name, core kinds and top frequencies</string>
+    <string name="hide_cpu_name">CPU name and core kinds</string>
+    <string name="hide_cpu_frequency">Cores\' top frequencies</string>
     <string name="hide_memory">Memory and swap</string>
     <string name="hide_storage">Storage</string>
     <string name="hide_gpu">Everything about the GPU</string>
-    <string name="hide_gpu_usage">GPU usage only</string>
+    <string name="hide_gpu_name">GPU names</string>
+    <string name="hide_gpu_usage">GPU usage</string>
+    <string name="hide_gpu_memory">GPU memory</string>
     <string name="hide_temperature">Temperatures</string>
     <string name="hide_battery">Battery</string>
     <string name="hide_uptime">Time since boot</string>

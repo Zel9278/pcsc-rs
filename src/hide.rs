@@ -4,26 +4,26 @@
 //! than as a value.
 
 /// Every item that can be hidden, and what it covers.
-pub const ITEMS: [(&str, &str); 12] = [
+pub const ITEMS: [(&str, &str); 15] = [
     ("os", "the OS name and version"),
     ("cpu", "CPU usage, per core"),
-    (
-        "cpu_model",
-        "the CPU's name and its cores' kinds and top frequencies",
-    ),
+    ("cpu_name", "the CPU's name and its cores' kinds"),
+    ("cpu_frequency", "the cores' top frequencies"),
     ("memory", "memory and swap"),
     ("storage", "disks"),
-    ("gpu", "GPUs altogether"),
-    (
-        "gpu_usage",
-        "GPU usage only (names, memory and temperatures stay)",
-    ),
+    ("gpu", "GPUs altogether (the four gpu_ items)"),
+    ("gpu_name", "GPU names"),
+    ("gpu_usage", "GPU usage"),
+    ("gpu_memory", "GPU memory"),
     ("temperature", "temperature sensors, GPUs' too"),
     ("battery", "the battery"),
     ("uptime", "time since boot"),
     ("loadavg", "load average"),
     ("iowait", "IO wait"),
 ];
+
+/// What `gpu` covers besides the GPUs' temperatures (those are `temperature`'s).
+const GPU_PARTS: [&str; 3] = ["gpu_name", "gpu_usage", "gpu_memory"];
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Hidden(Vec<&'static str>);
@@ -46,16 +46,16 @@ impl Hidden {
                 None => unknown.push(name),
             }
         }
-        // All of the GPU covers its usage
+        // All of the GPU covers its parts
         if items.contains(&"gpu") {
-            items.retain(|item| *item != "gpu_usage");
+            items.retain(|item| !GPU_PARTS.contains(item));
         }
         items.sort_unstable();
         (Self(items), unknown)
     }
 
     pub fn has(&self, item: &str) -> bool {
-        self.0.contains(&item) || (item == "gpu_usage" && self.0.contains(&"gpu"))
+        self.0.contains(&item) || (GPU_PARTS.contains(&item) && self.0.contains(&"gpu"))
     }
 
     pub fn names(&self) -> &[&'static str] {
@@ -79,9 +79,10 @@ mod tests {
         assert!(hidden.has("gpu_usage"));
         assert!(!hidden.has("gpu"));
 
-        let (gpu, _) = Hidden::parse("gpu_usage gpu gpu");
+        let (gpu, _) = Hidden::parse("gpu_usage gpu gpu_name gpu");
         assert_eq!(gpu.names(), ["gpu"]);
-        assert!(gpu.has("gpu_usage"));
+        assert!(gpu.has("gpu_usage") && gpu.has("gpu_name") && gpu.has("gpu_memory"));
+        assert!(!gpu.has("temperature"));
 
         assert!(Hidden::parse("").0.is_empty());
     }

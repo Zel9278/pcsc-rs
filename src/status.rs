@@ -149,7 +149,14 @@ impl SystemStatus {
         }
 
         let cores = system.cpus();
-        let (kinds, max_mhz) = core_kinds(cores);
+        let (mut kinds, max_mhz) = core_kinds(cores);
+        // Kinds told apart by frequency alone would give the frequency away
+        // ("1× Kryo-4XX-Gold 2.40 GHz"); without it, they are one kind
+        if identity.hidden.has("cpu_frequency") {
+            for kind in &mut kinds {
+                kind.max_mhz = None;
+            }
+        }
         let mixed = cores::group(&kinds).len() > 1;
         let cpu = CpuData {
             model: cores::model(&kinds),
@@ -211,17 +218,21 @@ impl SystemStatus {
             match item {
                 "os" => self._os.clear(),
                 "cpu" => self.cpu.cpus.iter_mut().for_each(|c| c.usage = 0.0),
-                "cpu_model" => {
+                "cpu_name" => {
                     self.cpu.model.clear();
-                    for core in &mut self.cpu.cpus {
-                        core.model = None;
-                        core.max_mhz = None;
-                    }
+                    self.cpu.cpus.iter_mut().for_each(|c| c.model = None);
                 }
+                // The name already left the frequencies out (see collect)
+                "cpu_frequency" => self.cpu.cpus.iter_mut().for_each(|c| c.max_mhz = None),
                 "memory" => (self.ram, self.swap) = (zero(), zero()),
                 "storage" => self.storages.clear(),
                 "gpu" => self.gpus.clear(),
+                "gpu_name" => self.gpus.iter_mut().for_each(|g| g.name.clear()),
                 "gpu_usage" => self.gpus.iter_mut().for_each(|g| g.usage = 0.0),
+                "gpu_memory" => self
+                    .gpus
+                    .iter_mut()
+                    .for_each(|g| g.memory = GpuMemory { free: 0, total: 0 }),
                 "temperature" => {
                     self.temperatures.clear();
                     self.gpus.iter_mut().for_each(|g| g.temperature = None);
@@ -497,9 +508,10 @@ mod tests {
     #[test]
     #[allow(clippy::used_underscore_binding)]
     fn hides_items() {
-        let (hidden, _) = crate::hide::Hidden::parse("gpu_usage memory os");
+        let (hidden, _) = crate::hide::Hidden::parse("gpu_usage memory os gpu_name");
         let status = super::sample().hide(&hidden);
-        assert_eq!(status.hidden, ["gpu_usage", "memory", "os"]);
+        assert_eq!(status.hidden, ["gpu_name", "gpu_usage", "memory", "os"]);
+        assert!(status.gpus.iter().all(|g| g.name.is_empty()));
         assert_eq!(status._os, "");
         assert_eq!((status.ram.total, status.swap.total), (0, 0));
         assert!(status.gpus.iter().all(|g| g.usage == 0.0));

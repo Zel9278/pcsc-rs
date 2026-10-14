@@ -48,9 +48,13 @@ data class Settings(
 
 /** What the client can keep off PC Status (`PCSC_HIDE`), in the order the app lists them. */
 val HIDE_ITEMS = listOf(
-    "os", "cpu", "cpu_model", "memory", "storage", "gpu", "gpu_usage",
+    "os", "cpu", "cpu_name", "cpu_frequency", "memory", "storage",
+    "gpu", "gpu_name", "gpu_usage", "gpu_memory",
     "temperature", "battery", "uptime", "loadavg", "iowait",
 )
+
+/** What `gpu` covers. */
+val GPU_PARTS = setOf("gpu_name", "gpu_usage", "gpu_memory")
 
 /** `PCSC_HIDE` from a set of names: comma separated, in list order. */
 fun pcscHide(hidden: Set<String>) = HIDE_ITEMS.filter { it in hidden }.joinToString(",")

@@ -381,8 +381,8 @@ private fun App(shizukuChanges: MutableIntState) {
             Section(stringResource(R.string.hide_title)) {
                 Text(stringResource(R.string.hide_hint), style = MaterialTheme.typography.bodySmall)
                 for (item in HIDE_ITEMS) {
-                    // All of the GPU covers its usage
-                    val coveredByGpu = item == "gpu_usage" && "gpu" in settings.hidden
+                    // All of the GPU covers its parts
+                    val coveredByGpu = item in GPU_PARTS && "gpu" in settings.hidden
                     Row(
                         Modifier
                             .fillMaxWidth()
@@ -425,11 +425,14 @@ private fun App(shizukuChanges: MutableIntState) {
 private fun hideLabel(item: String) = when (item) {
     "os" -> R.string.hide_os
     "cpu" -> R.string.hide_cpu
-    "cpu_model" -> R.string.hide_cpu_model
+    "cpu_name" -> R.string.hide_cpu_name
+    "cpu_frequency" -> R.string.hide_cpu_frequency
     "memory" -> R.string.hide_memory
     "storage" -> R.string.hide_storage
     "gpu" -> R.string.hide_gpu
+    "gpu_name" -> R.string.hide_gpu_name
     "gpu_usage" -> R.string.hide_gpu_usage
+    "gpu_memory" -> R.string.hide_gpu_memory
     "temperature" -> R.string.hide_temperature
     "battery" -> R.string.hide_battery
     "uptime" -> R.string.hide_uptime
