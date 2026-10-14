@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.16.0](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.15.1...v0.16.0) (2026-10-14)
+
+
+### Features
+
+* Mali GPU ([0ebb507](https://github.com/SHINTRANET-Lab/pcsc-rs/commit/0ebb5076e6ecca793a18f087d93f3c718ec3cc0d))
+* Raspberry PI and Intel GPU name ([9ef9ea9](https://github.com/SHINTRANET-Lab/pcsc-rs/commit/9ef9ea99f5c807fe432507e280263791ad471826))
+
 ## [0.15.1](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.15.0...v0.15.1) (2026-10-14)
 
 
