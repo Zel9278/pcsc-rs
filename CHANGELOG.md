@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.3](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.17.2...v0.17.3) (2026-10-14)
+
+
+### Bug Fixes
+
+* secrity audit ([d8ceb6b](https://github.com/SHINTRANET-Lab/pcsc-rs/commit/d8ceb6bcb155f177977e30865039eeaeef4f550c))
+
 ## [0.17.2](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.17.1...v0.17.2) (2026-10-14)
 
 
