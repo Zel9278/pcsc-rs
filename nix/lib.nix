@@ -9,6 +9,7 @@ rec {
       HOSTNAME = cfg.hostname;
       PCSC_URI = cfg.uri;
       DEV_MODE = if cfg.devMode then "true" else null;
+      PCSC_HIDE = if cfg.hide == [ ] then null else lib.concatStringsSep "," cfg.hide;
     };
 
   assertions = name: cfg: [
