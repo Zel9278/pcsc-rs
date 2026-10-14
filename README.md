@@ -241,6 +241,7 @@ $env:PASS = "<PASS>"; & ([scriptblock]::Create((irm https://raw.githubuserconten
     # hostname = "表示したい名前";
     # devMode = true;
     # uri = "wss://pcss.eov2.com/server";
+    # hide = [ "gpu_usage" "temperature" ];  # PC Status に出さない項目（その他の設定の PCSC_HIDE）
   };
 }
 ```

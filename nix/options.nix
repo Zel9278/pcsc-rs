@@ -48,4 +48,32 @@ in
     default = false;
     description = "Let several clients share a hostname (DEV_MODE=true).";
   };
+
+  hide = mkOption {
+    type = types.listOf (
+      types.enum [
+        "os"
+        "cpu"
+        "cpu_name"
+        "cpu_frequency"
+        "memory"
+        "storage"
+        "gpu"
+        "gpu_name"
+        "gpu_usage"
+        "gpu_memory"
+        "temperature"
+        "battery"
+        "uptime"
+        "loadavg"
+        "iowait"
+      ]
+    );
+    default = [ ];
+    example = [
+      "gpu_usage"
+      "temperature"
+    ];
+    description = "Items kept off PC Status (PCSC_HIDE); PC Status shows them as not public.";
+  };
 }
