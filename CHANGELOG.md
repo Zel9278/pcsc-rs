@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.15.0](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.14.0...v0.15.0) (2026-10-14)
+
+
+### Features
+
+* Geforce ULP(Tegra) ([898808e](https://github.com/SHINTRANET-Lab/pcsc-rs/commit/898808ebd52087eafc02c012d14bb7e200d82269))
+
+
+### Bug Fixes
+
+* Action ([bb0e42c](https://github.com/SHINTRANET-Lab/pcsc-rs/commit/bb0e42cfa37448a611c5eaca91d37d02e6ba0855))
+
 ## [0.14.0](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.13.0...v0.14.0) (2026-10-14)
 
 
