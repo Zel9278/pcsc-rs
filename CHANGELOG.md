@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.15.1](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.15.0...v0.15.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* Action 2 ([feaaa59](https://github.com/SHINTRANET-Lab/pcsc-rs/commit/feaaa59a5409e6c9725f5ca2dd89cd311dbaa53f))
+* Action 3 ([24faa1e](https://github.com/SHINTRANET-Lab/pcsc-rs/commit/24faa1ef4639e563680d85ef3522cd52e2c75f09))
+
 ## [0.15.0](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.14.0...v0.15.0) (2026-10-14)
 
 
