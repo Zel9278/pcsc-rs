@@ -33,8 +33,12 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
-            if (keystore != null) {
-                signingConfig = signingConfigs.getByName("release")
+            // Like the app: the release key when there is one, otherwise the debug key
+            // (a pull request's APK can never pass for a release)
+            signingConfig = if (keystore != null) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
             }
         }
     }
