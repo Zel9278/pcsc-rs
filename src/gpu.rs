@@ -473,10 +473,6 @@ mod tests {
         use super::mobile::{
             first_percent, gles_renderer, global_total, mem_total_kib, name, percent, pi_gpu, usage,
         };
-        use super::mobile::{
-            first_percent, gles_renderer, global_total, mem_total_kib, name, percent, usage,
-        };
-        use super::mobile::{gles_renderer, global_total, mem_total_kib, name, percent, usage};
         assert_eq!(
             usage("  23464 1006294"),
             Some(23464.0 / 1_006_294.0 * 100.0)
