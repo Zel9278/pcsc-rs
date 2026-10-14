@@ -454,6 +454,7 @@ const KINDS_RECHECK: Duration = Duration::from_secs(10);
 /// The kind of each core, indexed by CPU number. Empty where cores have no CPU part.
 /// A kind never changes, so it is read once; but while some cores were offline their
 /// kind was only guessed (like the nearest lower core), so that is checked again now and then.
+#[cfg(not(windows))]
 pub fn max_mhz_per_core(total: usize) -> Vec<Option<u32>> {
     static CACHE: Mutex<Option<(Instant, usize, bool, Vec<Option<u32>>)>> = Mutex::new(None);
     let total = total.max(possible_cores().unwrap_or(0));
@@ -484,6 +485,40 @@ pub fn max_mhz_per_core(total: usize) -> Vec<Option<u32>> {
         .collect();
     *cache = Some((Instant::now(), total, complete, mhz.clone()));
     mhz
+}
+#[cfg(windows)]
+pub fn max_mhz_per_core(total: usize) -> Vec<Option<u32>> {
+    use windows_sys::Win32::System::Power::{
+        CallNtPowerInformation, PROCESSOR_POWER_INFORMATION, ProcessorInformation,
+    };
+    static CACHE: OnceLock<Vec<Option<u32>>> = OnceLock::new();
+    CACHE
+        .get_or_init(|| {
+            if total == 0 {
+                return Vec::new();
+            }
+            // SAFETY: the structure is plain integers; the buffer holds `total` of them
+            // and its byte size is passed along, so the call writes within it.
+            let mut buf: Vec<PROCESSOR_POWER_INFORMATION> =
+                (0..total).map(|_| unsafe { std::mem::zeroed() }).collect();
+            let bytes = u32::try_from(std::mem::size_of_val(buf.as_slice())).unwrap_or(0);
+            let status = unsafe {
+                CallNtPowerInformation(
+                    ProcessorInformation,
+                    std::ptr::null(),
+                    0,
+                    buf.as_mut_ptr().cast(),
+                    bytes,
+                )
+            };
+            if status < 0 {
+                return vec![None; total];
+            }
+            buf.iter()
+                .map(|p| (p.MaxMhz != 0).then_some(p.MaxMhz))
+                .collect()
+        })
+        .clone()
 }
 pub fn core_kinds(core_hint: Option<&str>) -> Vec<Option<CoreKind>> {
     static CACHE: Mutex<Option<(Instant, bool, Vec<Option<CoreKind>>)>> = Mutex::new(None);

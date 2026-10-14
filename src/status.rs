@@ -227,15 +227,19 @@ fn cpu_cores(system: &System) -> Vec<CoreData> {
             .collect()
     }
     #[cfg(not(any(target_os = "linux", target_os = "android")))]
-    system
-        .cpus()
-        .iter()
-        .map(|c| CoreData {
-            usage: c.cpu_usage(),
-            model: None,
-            max_mhz: None,
-        })
-        .collect()
+    {
+        let freqs = crate::cpuinfo::max_mhz_per_core(system.cpus().len());
+        system
+            .cpus()
+            .iter()
+            .enumerate()
+            .map(|(i, c)| CoreData {
+                usage: c.cpu_usage(),
+                model: None,
+                max_mhz: freqs.get(i).copied().flatten(),
+            })
+            .collect()
+    }
 }
 
 fn storages(disks: &Disks, io: &io::Tracker, interval: Duration) -> Vec<StorageData> {
