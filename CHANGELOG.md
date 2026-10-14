@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.12.1](https://github.com/Zel9278/pcsc-rs/compare/v2.12.0...v2.12.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* **deps:** update rustls to 0.23.46 ([#702](https://github.com/Zel9278/pcsc-rs/issues/702)) ([4e54e41](https://github.com/Zel9278/pcsc-rs/commit/4e54e41812505ca7d864f9ae51c9ba3bbb349399))
+
 ## [2.12.0](https://github.com/Zel9278/pcsc-rs/compare/v2.11.0...v2.12.0) (2026-10-14)
 
 
