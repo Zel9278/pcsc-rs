@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.0](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.16.0...v0.17.0) (2026-10-14)
+
+
+### Features
+
+* Matrox and ASPEED GPU ([e1a6392](https://github.com/SHINTRANET-Lab/pcsc-rs/commit/e1a6392693310da21c24edbfba90939c04c1a595))
+
 ## [0.16.0](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.15.1...v0.16.0) (2026-10-14)
 
 
