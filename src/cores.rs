@@ -9,7 +9,8 @@
 //! there the top frequency can differ between cores of one kind (Intel's favoured
 //! cores), which is no reason to split them.
 //!
-//! Every core's top frequency is reported on Linux and Android anyway ([`max_mhz`]).
+//! Every core's top frequency is reported anyway where the system gives one
+//! ([`max_mhz_per_core`]: Linux, Android, Windows).
 
 /// One kind of core.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -56,8 +57,13 @@ pub fn per_core(brands: &[&str]) -> Vec<Kind> {
     }
 }
 
-/// The top frequency of each core's cpufreq policy in MHz, where the kernel gives one.
+/// The top frequency of each core in MHz, where the system gives one: the core's cpufreq
+/// policy on Linux and Android, the processor's power information on Windows (its rated
+/// top speed, what Task Manager calls the base speed). None elsewhere.
 pub fn max_mhz_per_core(count: usize) -> Vec<Option<u32>> {
+    #[cfg(windows)]
+    return windows_max_mhz(count);
+    #[cfg(not(windows))]
     (0..count)
         .map(|core| {
             #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -69,6 +75,44 @@ pub fn max_mhz_per_core(count: usize) -> Vec<Option<u32>> {
             }
         })
         .collect()
+}
+
+/// `MaxMhz` of each logical processor from `CallNtPowerInformation(ProcessorInformation)`.
+#[cfg(windows)]
+fn windows_max_mhz(count: usize) -> Vec<Option<u32>> {
+    use windows_sys::Win32::System::Power::{
+        CallNtPowerInformation, PROCESSOR_POWER_INFORMATION, ProcessorInformation,
+    };
+    let mut mhz = vec![None; count];
+    if count == 0 {
+        return mhz;
+    }
+    // SAFETY: plain integers, for which zero is a valid value
+    let mut info: Vec<PROCESSOR_POWER_INFORMATION> =
+        (0..count).map(|_| unsafe { std::mem::zeroed() }).collect();
+    let Ok(bytes) = u32::try_from(std::mem::size_of_val(info.as_slice())) else {
+        return mhz;
+    };
+    // SAFETY: the buffer holds `count` structures and its size in bytes is passed along,
+    // so the call writes within it. It fails (buffer too small) rather than overrun.
+    let status = unsafe {
+        CallNtPowerInformation(
+            ProcessorInformation,
+            std::ptr::null(),
+            0,
+            info.as_mut_ptr().cast(),
+            bytes,
+        )
+    };
+    if status < 0 {
+        return mhz;
+    }
+    for p in &info {
+        if let Some(slot) = mhz.get_mut(p.Number as usize) {
+            *slot = (p.MaxMhz != 0).then_some(p.MaxMhz);
+        }
+    }
+    mhz
 }
 
 /// `cpuinfo_max_freq` of the core's policy, in MHz.
