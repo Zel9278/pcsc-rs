@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.9.0](https://github.com/Zel9278/pcsc-rs/compare/v2.8.0...v2.9.0) (2026-10-14)
+
+
+### Features
+
+* send each processor's top speed on Windows too ([#694](https://github.com/Zel9278/pcsc-rs/issues/694)) ([8051af0](https://github.com/Zel9278/pcsc-rs/commit/8051af034653736638dbf4f0bdfef7f45628d17f)), closes [#693](https://github.com/Zel9278/pcsc-rs/issues/693)
+
 ## [2.8.0](https://github.com/Zel9278/pcsc-rs/compare/v2.7.0...v2.8.0) (2026-10-13)
 
 
