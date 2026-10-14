@@ -50,7 +50,10 @@ pub fn get_info() -> Vec<GpuData> {
     cards.sort_by_key(|p| card_number(p));
     let cards: Vec<Card> = cards.iter().filter_map(|card| Card::new(card)).collect();
     // Reading every program's fdinfo is the costly part; only when an Intel GPU is awake
-    let intel = if cards.iter().any(|c| c.driver != "amdgpu" && !c.suspended) {
+    let intel = if cards
+        .iter()
+        .any(|c| matches!(c.driver.as_str(), "i915" | "xe") && !c.suspended)
+    {
         engines::usage()
     } else {
         HashMap::new()
@@ -71,7 +74,10 @@ impl Card {
         let device = card.join("device");
         let driver = fs::read_link(device.join("driver")).ok()?;
         let driver = driver.file_name()?.to_str()?.to_owned();
-        if !matches!(driver.as_str(), "amdgpu" | "i915" | "xe") {
+        if !matches!(
+            driver.as_str(),
+            "amdgpu" | "i915" | "xe" | "mgag200" | "ast"
+        ) {
             return None;
         }
         let slot = fs::canonicalize(&device)
@@ -192,6 +198,9 @@ fn look_up_name(device: &Path) -> String {
     {
         return format!("Intel {name}");
     }
+    if (vendor.as_str(), device_id.as_str()) == ("102b", "0532") {
+        return "Matrox MGA G200eW WPCM450".to_owned();
+    }
     fn intel_name(device: &str) -> Option<&'static str> {
         Some(match device {
             // GMA
@@ -287,6 +296,8 @@ fn vendor_name<'a>(vendor: &str, from_ids: Option<&'a str>) -> &'a str {
     match vendor {
         "8086" => "Intel",
         "1002" => "AMD",
+        "102b" => "Matrox",
+        "1a03" => "ASPEED",
         _ => from_ids.unwrap_or("GPU"),
     }
 }
@@ -344,6 +355,8 @@ mod tests {
 \t\t1002 0e3b  Radeon RX 7900 GRE
 14e4  Broadcom Inc. and subsidiaries
 \t164e  NetXtreme II BCM57710 10-Gigabit PCIe [Everest]
+102b  Matrox Electronics Systems Ltd.
+\t0532  MGA G200eW WPCM450
 8086  Intel Corporation
 \t9a60  TigerLake-H GT1 [UHD Graphics]
 ";
@@ -365,6 +378,10 @@ mod tests {
         );
         assert_eq!(pci_name(IDS, "1002", "ffff"), None);
         assert_eq!(pci_name(IDS, "10de", "2504"), None);
+        assert_eq!(
+            pci_name(IDS, "102b", "0532").as_deref(),
+            Some("Matrox MGA G200eW WPCM450")
+        );
     }
     #[test]
     fn intel_names() {
