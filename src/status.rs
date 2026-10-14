@@ -208,11 +208,17 @@ fn cpu_cores(system: &System) -> Vec<CoreData> {
             .iter()
             .map(|c| (c.name().to_owned(), c.cpu_usage()))
             .collect();
-        let usages =
+        let mut usages =
             crate::cpuinfo::spread_usage(&named, crate::cpuinfo::possible_cores().unwrap_or(0));
         let kinds = crate::cpuinfo::core_kinds(crate::android::cpu_model().as_deref());
         let mixed = crate::cpuinfo::is_mixed(&kinds);
         let freqs = crate::cpuinfo::max_mhz_per_core(usages.len());
+        // Tegra 3's companion core is invisible to the OS: listed at the running cores' average
+        let average = usages.iter().sum::<f32>() / usages.len().max(1) as f32;
+        usages.extend(std::iter::repeat_n(
+            average,
+            crate::cpuinfo::companion_cores(),
+        ));
         usages
             .into_iter()
             .enumerate()

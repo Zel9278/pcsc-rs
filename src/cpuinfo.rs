@@ -325,7 +325,11 @@ fn soc_name(cores: &[CoreInfo]) -> Option<String> {
     if let Some(p) = platform.as_deref() {
         let brand = brand_of(p);
         if brand != p.trim() {
-            return Some(brand);
+            return Some(if brand == "Tegra" {
+                tegra_name(cores)
+            } else {
+                brand
+            });
         }
     }
     getprop("ro.hardware.chipname")
@@ -347,11 +351,48 @@ fn brand_of(raw: &str) -> String {
         || lower.contains("snapdragon");
     if qualcomm {
         "Snapdragon".to_owned()
+    } else if lower.starts_with("tegra") {
+        "Tegra".to_owned()
     } else {
         raw.trim().to_owned()
     }
 }
 
+/// "tegra" is the board platform of every Tegra. Tegra 3 is four Cortex-A9 plus a
+/// companion core the kernel cannot see, whose cluster switch lives in /sys/kernel/cluster;
+/// Tegra 2 is two Cortex-A9 without it. Anything else stays "Tegra".
+fn tegra_name(cores: &[CoreInfo]) -> String {
+    let a9 = !cores.is_empty()
+        && cores
+            .iter()
+            .all(|c| (c.implementer, c.part) == (Some(0x41), Some(0xc09)));
+    let companion = std::path::Path::new("/sys/kernel/cluster").is_dir();
+    match cores.len() {
+        4 if a9 && companion => "Tegra 3",
+        2 if a9 && !companion => "Tegra 2",
+        _ => "Tegra",
+    }
+    .to_owned()
+}
+fn is_tegra3(cores: &[CoreInfo]) -> bool {
+    getprop("ro.board.platform").is_some_and(|p| p.trim().to_lowercase().starts_with("tegra"))
+        && tegra_name(cores) == "Tegra 3"
+}
+
+/// Cores the OS cannot see: Tegra 3's companion core (the fifth, low-power one, which runs
+/// instead of the four main ones when the load is light). 0 on everything else.
+pub fn companion_cores() -> usize {
+    static N: OnceLock<usize> = OnceLock::new();
+    *N.get_or_init(|| {
+        let text = fs::read_to_string("/proc/cpuinfo").unwrap_or_default();
+        let cores = parse_cpuinfo(&text);
+        let cores = match possible_cores() {
+            Some(n) => fill_offline(cores, n),
+            None => cores,
+        };
+        usize::from(is_tegra3(&cores))
+    })
+}
 fn compute(brand: &str, hint: Option<&str>) -> String {
     let brand = brand.trim();
     let text = fs::read_to_string("/proc/cpuinfo").unwrap_or_default();
@@ -369,7 +410,14 @@ fn compute(brand: &str, hint: Option<&str>) -> String {
         None => cores,
     };
     let freqs = read_max_freqs(&cores);
-    let layout = layout(&cores, &freqs, hint);
+    let layout = layout(&cores, &freqs, hint).map(|l| {
+        // Tegra 3: four main cores plus the companion core
+        if is_tegra3(&cores) {
+            l.replacen("4×", "4+1×", 1)
+        } else {
+            l
+        }
+    });
     compose(soc_name(&cores).as_deref(), layout.as_deref())
         .or_else(|| brand_is_name.then(|| brand.to_owned()))
         .or_else(|| cores.iter().find_map(|c| c.name.clone()))
@@ -727,5 +775,22 @@ mod tests {
     fn max_mhz_per_core_has_one_entry_per_core() {
         // Whatever this machine is, the list has one slot per core asked for
         assert!(max_mhz_per_core(2).len() >= 2);
+    }
+    #[test]
+    fn tegra_is_named_by_its_cores() {
+        assert_eq!(brand_of("tegra"), "Tegra");
+        let a9 = |n: usize| {
+            (0..n)
+                .map(|index| CoreInfo {
+                    index,
+                    implementer: Some(0x41),
+                    part: Some(0xc09),
+                    ..CoreInfo::default()
+                })
+                .collect::<Vec<_>>()
+        };
+        // 4 cores: "Tegra 3" where /sys/kernel/cluster exists, else plain "Tegra"
+        assert!(matches!(tegra_name(&a9(4)).as_str(), "Tegra 3" | "Tegra"));
+        assert_eq!(tegra_name(&[]), "Tegra");
     }
 }
