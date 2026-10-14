@@ -183,6 +183,7 @@ mod mobile {
             .or_else(generic_mali)
             .or_else(powervr)
             .or_else(tegra)
+            .or_else(raspberry_pi)
             .or_else(name_only)?;
         // 汎用名（"Arm Mali" など）しか分からないときは、GLES の名前に置き換える
         let name = if matches!(
@@ -392,6 +393,20 @@ mod mobile {
         *last = Some((now, on_ms));
         Some(("ULP GeForce (Tegra)".to_owned(), usage))
     }
+    pub(super) fn pi_gpu(model: &str) -> Option<&'static str> {
+        let model = model.trim_matches(|c: char| c.is_whitespace() || c == '\0');
+        let rest = model.strip_prefix("Raspberry Pi ")?;
+        // The 4, 400, Compute Module 4 and the 5 have newer GPUs; Zero, Zero W, Zero 2 W,
+        // 1, 2, 3 and Compute Module 1/3 have VideoCore IV
+        let newer = ["4", "5", "Compute Module 4", "Compute Module 5"]
+            .iter()
+            .any(|p| rest.starts_with(p));
+        (!newer).then_some("VideoCore IV")
+    }
+    fn raspberry_pi() -> Option<(String, f64)> {
+        let model = fs::read_to_string("/proc/device-tree/model").ok()?;
+        Some((pi_gpu(&model)?.to_owned(), 0.0))
+    }
     fn name_only() -> Option<(String, f64)> {
         Some((renderer_name()?, 0.0))
     }
@@ -456,6 +471,9 @@ mod tests {
     #[test]
     fn adreno() {
         use super::mobile::{
+            first_percent, gles_renderer, global_total, mem_total_kib, name, percent, pi_gpu, usage,
+        };
+        use super::mobile::{
             first_percent, gles_renderer, global_total, mem_total_kib, name, percent, usage,
         };
         use super::mobile::{gles_renderer, global_total, mem_total_kib, name, percent, usage};
@@ -498,5 +516,23 @@ mod tests {
         assert_eq!(first_percent("35 20 45"), Some(35.0));
         assert_eq!(first_percent("42"), Some(42.0));
         assert_eq!(first_percent("x"), None);
+        assert_eq!(
+            pi_gpu("Raspberry Pi 3 Model B Rev 1.2\0"),
+            Some("VideoCore IV")
+        );
+        assert_eq!(pi_gpu("Raspberry Pi Zero W Rev 1.1"), Some("VideoCore IV"));
+        assert_eq!(
+            pi_gpu("Raspberry Pi Zero 2 W Rev 1.0"),
+            Some("VideoCore IV")
+        );
+        assert_eq!(
+            pi_gpu("Raspberry Pi 2 Model B Rev 1.1"),
+            Some("VideoCore IV")
+        );
+        assert_eq!(pi_gpu("Raspberry Pi Model B Rev 2"), Some("VideoCore IV"));
+        assert_eq!(pi_gpu("Raspberry Pi 4 Model B Rev 1.5"), None);
+        assert_eq!(pi_gpu("Raspberry Pi 400 Rev 1.0"), None);
+        assert_eq!(pi_gpu("Raspberry Pi 5 Model B Rev 1.0"), None);
+        assert_eq!(pi_gpu("Some Other Board"), None);
     }
 }
