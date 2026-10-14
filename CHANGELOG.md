@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.13.0...v0.14.0) (2026-10-14)
+
+
+### Features
+
+* Tegra 3 Status Support ([bffdbc7](https://github.com/SHINTRANET-Lab/pcsc-rs/commit/bffdbc74624b6c276d1a89b0dbf2f54bcb49e737))
+
 ## [0.13.0](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.12.0...v0.13.0) (2026-10-13)
 
 
