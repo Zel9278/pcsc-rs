@@ -264,3 +264,27 @@ $env:PASS = "<PASS>"; & ([scriptblock]::Create((irm https://raw.githubuserconten
 - `HOSTNAME`
 
   PC Status に表示するホスト名 (デフォルト: PC のホスト名)
+
+- `PCSC_HIDE`
+
+  PC Status に出さない項目。カンマか空白で区切って並べます (例: `PCSC_HIDE=gpu_usage,temperature`)。その項目は送らず、PC Status には「非公開」と出ます。
+
+  | 値              | 出さないもの                                  |
+  | --------------- | --------------------------------------------- |
+  | `os`            | OS の名前とバージョン                         |
+  | `cpu`           | CPU の使用率 (コアごとも)                     |
+  | `cpu_name`      | CPU の名前と、コアの種類                      |
+  | `cpu_frequency` | コアの最高周波数                              |
+  | `memory`        | メモリとスワップ                              |
+  | `storage`       | ストレージ                                    |
+  | `gpu`           | GPU の情報すべて (下の3つと、GPU の有無)      |
+  | `gpu_name`      | GPU の名前                                    |
+  | `gpu_usage`     | GPU の使用率                                  |
+  | `gpu_memory`    | GPU のメモリ                                  |
+  | `temperature`   | 温度 (GPU の温度も)                           |
+  | `battery`       | バッテリー                                    |
+  | `uptime`        | 起動からの時間                                |
+  | `loadavg`       | ロードアベレージ                              |
+  | `iowait`        | IO 待ち                                       |
+
+  知らない名前は起動時のログに出ます。ホスト名とクライアントのバージョンは、PC を見分けるのに使うので隠せません。

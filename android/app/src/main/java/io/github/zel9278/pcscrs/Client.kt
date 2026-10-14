@@ -48,6 +48,7 @@ done
         append("PCSC_UPDATED=terminate\n")
         if (settings.hostname.isNotBlank()) append("HOSTNAME='${settings.hostname.trim()}'\n")
         if (settings.uri.isNotBlank()) append("PCSC_URI='${settings.uri.trim()}'\n")
+        if (settings.hidden.isNotEmpty()) append("PCSC_HIDE='${pcscHide(settings.hidden)}'\n")
     }
 
     suspend fun start(context: Context, shell: PrivilegedShell, settings: Settings): ShellResult {

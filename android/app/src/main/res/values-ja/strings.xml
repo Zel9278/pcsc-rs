@@ -70,4 +70,23 @@
     <string name="log_title">ログ</string>
     <string name="log_empty">ログはまだありません</string>
     <string name="failed">失敗しました: %1$s</string>
+
+    <string name="hide_title">PC Status に出さない項目</string>
+    <string name="hide_hint">選んだ項目は送らず、PC Status には「非公開」と出ます。ホスト名とバージョンは隠せません。</string>
+    <string name="hide_restart">変えたら「再起動」を押すと反映されます</string>
+    <string name="hide_os">OS の名前とバージョン</string>
+    <string name="hide_cpu">CPU の使用率</string>
+    <string name="hide_cpu_name">CPU の名前とコアの種類</string>
+    <string name="hide_cpu_frequency">コアの最高周波数</string>
+    <string name="hide_memory">メモリとスワップ</string>
+    <string name="hide_storage">ストレージ</string>
+    <string name="hide_gpu">GPU の情報すべて</string>
+    <string name="hide_gpu_name">GPU の名前</string>
+    <string name="hide_gpu_usage">GPU の使用率</string>
+    <string name="hide_gpu_memory">GPU のメモリ</string>
+    <string name="hide_temperature">温度</string>
+    <string name="hide_battery">バッテリー</string>
+    <string name="hide_uptime">起動からの時間</string>
+    <string name="hide_loadavg">ロードアベレージ</string>
+    <string name="hide_iowait">IO 待ち</string>
 </resources>

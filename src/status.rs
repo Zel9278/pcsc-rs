@@ -10,7 +10,9 @@ use sysinfo::{Cpu, Disks, System};
 
 use crate::{
     battery::{self, BatteryData},
-    cores, gpu, io,
+    cores, gpu,
+    hide::Hidden,
+    io,
     monitor::Sampler,
     thermal::{self, Temperature},
 };
@@ -96,6 +98,9 @@ pub struct SystemStatus {
     /// Empty where no sensor is readable (Windows without administrator rights, most VMs).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) temperatures: Vec<Temperature>,
+    /// Items the owner keeps off PC Status (`PCSC_HIDE`): left out or zero above.
+    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+    pub(crate) hidden: Vec<&'static str>,
     /// Kept by the server; sent for compatibility with the monorepo server.
     pub(crate) index: u32,
     /// Kept by the server; sent for compatibility with the monorepo server.
@@ -107,6 +112,7 @@ pub struct SystemStatus {
 pub struct Identity {
     pub hostname: Option<String>,
     pub dev: bool,
+    pub hidden: Hidden,
 }
 
 /// `git describe` of the build, or the crate version when built outside a repository.
@@ -143,7 +149,14 @@ impl SystemStatus {
         }
 
         let cores = system.cpus();
-        let (kinds, max_mhz) = core_kinds(cores);
+        let (mut kinds, max_mhz) = core_kinds(cores);
+        // Kinds told apart by frequency alone would give the frequency away
+        // ("1× Kryo-4XX-Gold 2.40 GHz"); without it, they are one kind
+        if identity.hidden.has("cpu_frequency") {
+            for kind in &mut kinds {
+                kind.max_mhz = None;
+            }
+        }
         let mixed = cores::group(&kinds).len() > 1;
         let cpu = CpuData {
             model: cores::model(&kinds),
@@ -162,7 +175,7 @@ impl SystemStatus {
 
         let (battery, temperatures) = sensors(thermal);
 
-        Self {
+        let status = Self {
             dev: identity.dev,
             _os: format!("{os_name} {os_version}").trim_end().to_owned(),
             hostname,
@@ -180,12 +193,62 @@ impl SystemStatus {
             uptime: System::uptime(),
             loadavg,
             iowait: io.iowait(),
-            gpus: gpu::get_info(),
+            // Not even asked for (nvidia-smi is a process each time)
+            gpus: if identity.hidden.has("gpu") {
+                Vec::new()
+            } else {
+                gpu::get_info()
+            },
             battery,
             temperatures,
+            hidden: Vec::new(),
             index: 0,
             histories: [],
+        };
+        status.hide(&identity.hidden)
+    }
+
+    /// Takes out what the owner keeps off PC Status. Fields the wire format requires
+    /// become zero or empty; the `hidden` list tells the server which.
+    // `_os` is the wire format's name for the OS
+    #[allow(clippy::used_underscore_binding)]
+    fn hide(mut self, hidden: &Hidden) -> Self {
+        let zero = || MemoryData { free: 0, total: 0 };
+        for &item in hidden.names() {
+            match item {
+                "os" => self._os.clear(),
+                "cpu" => self.cpu.cpus.iter_mut().for_each(|c| c.usage = 0.0),
+                "cpu_name" => {
+                    self.cpu.model.clear();
+                    self.cpu.cpus.iter_mut().for_each(|c| c.model = None);
+                }
+                // The name already left the frequencies out (see collect)
+                "cpu_frequency" => self.cpu.cpus.iter_mut().for_each(|c| c.max_mhz = None),
+                "memory" => (self.ram, self.swap) = (zero(), zero()),
+                "storage" => self.storages.clear(),
+                "gpu" => self.gpus.clear(),
+                "gpu_name" => self.gpus.iter_mut().for_each(|g| g.name.clear()),
+                "gpu_usage" => self.gpus.iter_mut().for_each(|g| g.usage = 0.0),
+                "gpu_memory" => self
+                    .gpus
+                    .iter_mut()
+                    .for_each(|g| g.memory = GpuMemory { free: 0, total: 0 }),
+                "temperature" => {
+                    self.temperatures.clear();
+                    self.gpus.iter_mut().for_each(|g| g.temperature = None);
+                    if let Some(battery) = &mut self.battery {
+                        battery.temperature = None;
+                    }
+                }
+                "battery" => self.battery = None,
+                "uptime" => self.uptime = 0,
+                "loadavg" => self.loadavg = [0.0; 3],
+                "iowait" => self.iowait = None,
+                _ => {}
+            }
         }
+        self.hidden = hidden.names().to_vec();
+        self
     }
 }
 
@@ -417,6 +480,7 @@ pub(crate) fn sample() -> SystemStatus {
             label: "coretemp Package id 0".into(),
             value: 61.5,
         }],
+        hidden: Vec::new(),
         index: 0,
         histories: [],
     }
@@ -441,6 +505,24 @@ fn core_kinds(cores: &[Cpu]) -> (Vec<cores::Kind>, Vec<Option<u32>>) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    #[allow(clippy::used_underscore_binding)]
+    fn hides_items() {
+        let (hidden, _) = crate::hide::Hidden::parse("gpu_usage memory os gpu_name");
+        let status = super::sample().hide(&hidden);
+        assert_eq!(status.hidden, ["gpu_name", "gpu_usage", "memory", "os"]);
+        assert!(status.gpus.iter().all(|g| g.name.is_empty()));
+        assert_eq!(status._os, "");
+        assert_eq!((status.ram.total, status.swap.total), (0, 0));
+        assert!(status.gpus.iter().all(|g| g.usage == 0.0));
+        // Not hidden: left as it was
+        assert_eq!(status.cpu.cpus[0].usage, super::sample().cpu.cpus[0].usage);
+        // Nothing hidden: no list on the wire
+        let json =
+            serde_json::to_value(super::sample().hide(&crate::hide::Hidden::default())).unwrap();
+        assert!(json.get("hidden").is_none());
+    }
+
     #[test]
     fn dpkg_version() {
         let status = "Package: pve-manager\nStatus: install ok installed\nVersion: 9.2.6\n\n\
