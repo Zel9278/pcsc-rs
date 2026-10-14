@@ -111,6 +111,18 @@ jobs:
             gh release upload ${{ inputs.tag-name }} "$filename"#${{ matrix.platform.target }} --clobber
           fi
 
+  # The crate without the client (pcsc_rs::Monitor), as programs that use it as a library build it
+  library:
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
+        with:
+          key: library
+      - run: cargo check --locked --lib --no-default-features
+
   # Runs each build against a stand-in PC Status server and checks every status it sends
   # (.github/e2e/run.py). The runners have no real GPU, but the code that looks for one
   # still runs: DXGI and the performance counters on Windows, ioreg on macOS.

@@ -10,8 +10,10 @@ fn main() -> io::Result<()> {
         Err(e) => println!("cargo::warning={e}"),
     }
 
+    // Only for the client's own executable: as a library (pcsc_rs::Monitor) the icon would
+    // end up in the program that uses it
     #[cfg(windows)]
-    {
+    if std::env::var_os("CARGO_FEATURE_CLIENT").is_some() {
         WindowsResource::new()
             .set_icon("assets/icon.ico")
             .compile()?;
