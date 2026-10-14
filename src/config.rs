@@ -1,5 +1,7 @@
 use std::env;
 
+use crate::hide::Hidden;
+
 pub const DEFAULT_URI: &str = "wss://pcss.eov2.com/server";
 
 /// What to do after the binary has replaced itself with a newer release.
@@ -36,6 +38,9 @@ pub struct Config {
     pub dev: bool,
     /// Behaviour after a self-update (`PCSC_UPDATED`).
     pub on_update: OnUpdate,
+    /// What to keep off PC Status (`PCSC_HIDE`), and the names in it that are not items.
+    pub hidden: Hidden,
+    pub unknown_hidden: Vec<String>,
 }
 
 impl Config {
@@ -43,12 +48,15 @@ impl Config {
     #[must_use]
     pub fn from_env() -> Option<Self> {
         let pass = env::var("PASS").ok()?;
+        let (hidden, unknown_hidden) = Hidden::parse(&env::var("PCSC_HIDE").unwrap_or_default());
         Some(Self {
             uri: websocket_url(&env::var("PCSC_URI").unwrap_or_else(|_| DEFAULT_URI.into())),
             pass,
             hostname: env::var("HOSTNAME").ok().filter(|h| !h.is_empty()),
             dev: env::var("DEV_MODE").is_ok_and(|v| v.eq_ignore_ascii_case("true")),
             on_update: OnUpdate::parse(env::var("PCSC_UPDATED").ok().as_deref()),
+            hidden,
+            unknown_hidden,
         })
     }
 }
