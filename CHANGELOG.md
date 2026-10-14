@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.1](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.17.0...v0.17.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* intel_name test ([0b483c4](https://github.com/SHINTRANET-Lab/pcsc-rs/commit/0b483c4e7af17f5d4843684dae480aca86bdcb41))
+
 ## [0.17.0](https://github.com/SHINTRANET-Lab/pcsc-rs/compare/v0.16.0...v0.17.0) (2026-10-14)
 
 
