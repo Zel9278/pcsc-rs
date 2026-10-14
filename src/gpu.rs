@@ -181,7 +181,8 @@ mod mobile {
             .or_else(samsung)
             .or_else(mediatek_mali)
             .or_else(generic_mali)
-            .or_else(powervr)?;
+            .or_else(powervr)
+            .or_else(tegra)?;
         // 汎用名（"Arm Mali" など）しか分からないときは、GLES の名前に置き換える
         let name = if matches!(
             name.as_str(),
@@ -347,6 +348,36 @@ mod mobile {
             _ if model.is_empty() => "Adreno".into(),
             _ => model.into(),
         }
+    }
+    #[allow(clippy::cast_precision_loss)]
+    fn tegra() -> Option<(String, f64)> {
+        // Tegra 3 only (the one this was checked on)
+        if crate::cpuinfo::companion_cores() == 0 {
+            return None;
+        }
+        static LAST: Mutex<Option<(Instant, u64)>> = Mutex::new(None);
+        let on_ms: u64 = fs::read_to_string("/sys/kernel/debug/clock/3d/time_on")
+            .ok()?
+            .trim()
+            .parse()
+            .ok()?;
+        let now = Instant::now();
+        let mut last = LAST
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let usage = match *last {
+            Some((at, before)) => {
+                let wall_ms = now.duration_since(at).as_secs_f64() * 1000.0;
+                if wall_ms > 0.0 {
+                    (on_ms.saturating_sub(before) as f64 / wall_ms * 100.0).clamp(0.0, 100.0)
+                } else {
+                    0.0
+                }
+            }
+            None => 0.0,
+        };
+        *last = Some((now, on_ms));
+        Some(("ULP GeForce (Tegra)".to_owned(), usage))
     }
 }
 
