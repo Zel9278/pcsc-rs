@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.11.0](https://github.com/Zel9278/pcsc-rs/compare/v2.10.0...v2.11.0) (2026-10-14)
+
+
+### Features
+
+* set PCSC_HIDE from the install scripts ([#698](https://github.com/Zel9278/pcsc-rs/issues/698)) ([22e2216](https://github.com/Zel9278/pcsc-rs/commit/22e221637f56690e036c686698aee55ebb51f072))
+
 ## [2.10.0](https://github.com/Zel9278/pcsc-rs/compare/v2.9.0...v2.10.0) (2026-10-14)
 
 
