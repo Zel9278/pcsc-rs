@@ -5,6 +5,8 @@
 #   scripts/android-adb.sh install                2回目以降は、入っている PASS のまま入れ直す
 #   scripts/android-adb.sh install --binary <file> 手元でビルドしたものを入れる
 #   scripts/android-adb.sh install --hostname <名前> PC Status に出す名前（既定は機種名。例: SH-M28）
+#   PCSC_HIDE=<項目,…> scripts/android-adb.sh install  PC Status に出さない項目（README の PCSC_HIDE）。
+#                                                 省くと前の設定のまま、PCSC_HIDE= で全部出す
 #   scripts/android-adb.sh stop | status | log [行数]
 #   scripts/android-adb.sh devices                つながっている端末とシリアルの一覧
 #   … --adb <adb の場所>（または環境変数 ADB）で、PATH に無い adb を使う
@@ -130,12 +132,16 @@ case "$command" in
     hostname=${hostname:-$(env_value HOSTNAME)}
     [ -n "$pass" ] || { echo "PASS を指定して（PASS=<PASS> $0 install）" >&2; exit 1; }
     # 値は '…' で囲んで書く（空白や記号があってもそのまま読まれる）。' だけは使えない
-    case "$pass$hostname" in *\'*) echo "PASS と名前に ' は使えない" >&2; exit 1 ;; esac
+    case "$pass$hostname${PCSC_HIDE:-}" in *\'*) echo "PASS と名前に ' は使えない" >&2; exit 1 ;; esac
+    # PCSC_HIDE を渡されたら入れ直す（空なら消す）。渡されなければ前のまま
+    replace='PASS|PCSC_UPDATED|HOSTNAME'
+    [ -z "${PCSC_HIDE+set}" ] || replace="$replace|PCSC_HIDE"
     {
       printf "PASS='%s'\nPCSC_UPDATED=terminate\n" "$pass"
       [ -z "$hostname" ] || printf "HOSTNAME='%s'\n" "$hostname"
+      [ -z "${PCSC_HIDE:-}" ] || printf "PCSC_HIDE='%s'\n" "$PCSC_HIDE"
       # ほかの設定（PCSC_URI、DEV_MODE など）はそのまま残す
-      printf '%s\n' "$old_env" | grep -vE '^(PASS|PCSC_UPDATED|HOSTNAME)=|^$' || true
+      printf '%s\n' "$old_env" | grep -vE "^($replace)=|^\$" || true
     } | adb shell "umask 077; cat > $DIR/.env"
 
     stop_remote

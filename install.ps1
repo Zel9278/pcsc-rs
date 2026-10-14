@@ -7,6 +7,7 @@
 #   ... -System   (in an administrator PowerShell)
 #       for the whole PC (%ProgramFiles%\pcsc-rs, starts at boot as SYSTEM, runs without anyone logged on)
 #   ... -Hostname my-pc   name shown on PC Status
+#   ... -Hide gpu_usage,temperature   what to keep off PC Status (PCSC_HIDE in the README); -Hide "" shows everything
 #   ... -Uninstall        stop and remove it
 #
 # Run it again without PASS to update: PASS and the other settings in .env (HOSTNAME, ...) are kept.
@@ -15,6 +16,8 @@
 param(
     [switch]$System,
     [string]$Hostname,
+    # Unset: keep the installed PCSC_HIDE
+    [string]$Hide,
     [switch]$Uninstall
 )
 
@@ -81,6 +84,9 @@ if (-not $pass) { throw "Set PASS first: `$env:PASS = `"<PASS>`"" }
 $keep.Remove("PASS")
 $keep.Remove("PCSC_UPDATED")
 if ($Hostname) { $keep["HOSTNAME"] = $Hostname }
+if ($PSBoundParameters.ContainsKey("Hide")) {
+    if ($Hide) { $keep["PCSC_HIDE"] = $Hide } else { $keep.Remove("PCSC_HIDE") }
+}
 
 # ---- Download ----
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12

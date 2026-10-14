@@ -10,6 +10,7 @@
 #   PCSC_HOSTNAME=<名前>  PC Status に出す名前（既定は NAS のホスト名。bash が HOSTNAME を勝手に
 #                         入れるので、この名前で渡す）
 #   PCSC_URI=<URL>        ほかの PC Status サーバーへ送るとき
+#   PCSC_HIDE=<項目,…>     PC Status に出さない項目（README の PCSC_HIDE。例: gpu_usage,temperature）
 #   PCSC_DIR=<場所>       置き場所（既定は /volume1/pcsc-rs。DSM の更新で消えないようデータボリュームに置く）
 #
 # 2回目からは PASS などを省いてもよい（置き場所の .env を使う）。落ちたとき・自動更新で終わったときは
@@ -60,6 +61,7 @@ if [ -n "${PASS:-}" ]; then
     printf "PASS='%s'\n" "$PASS"
     [ -z "${PCSC_HOSTNAME:-}" ] || printf "HOSTNAME='%s'\n" "$PCSC_HOSTNAME"
     [ -z "${PCSC_URI:-}" ] || printf "PCSC_URI='%s'\n" "$PCSC_URI"
+    [ -z "${PCSC_HIDE:-}" ] || printf "PCSC_HIDE='%s'\n" "$PCSC_HIDE"
     # 自分で更新したら終わる。ループが新しい版を起動する
     printf "PCSC_UPDATED=terminate\n"
   } > .env

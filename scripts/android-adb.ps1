@@ -4,6 +4,7 @@
 #
 #   $env:PASS = "<PASS>"; .\scripts\android-adb.ps1 install -Hostname my-phone
 #   .\scripts\android-adb.ps1 install                  later: keeps PASS and the name
+#   ... install -Hide gpu_usage,temperature            keep items off PC Status (PCSC_HIDE in the README)
 #   .\scripts\android-adb.ps1 install -Binary <file>   install a local build
 #   .\scripts\android-adb.ps1 stop | status | log
 #   .\scripts\android-adb.ps1 devices                 list connected devices and their serials
@@ -23,6 +24,8 @@ param(
     [ValidateSet("install", "stop", "status", "log", "devices")]
     [string]$Command = "install",
     [string]$Hostname,
+    # What to keep off PC Status (PCSC_HIDE in the README); unset keeps the installed one, "" shows everything
+    [string]$Hide,
     [string]$Binary,
     [int]$Lines = 30,
     [string]$Adb = $(if ($env:ADB) { $env:ADB } else { "adb" }),
@@ -138,13 +141,19 @@ switch ($Command) {
             if (-not $Hostname) { $Hostname = Get-EnvValue $oldEnv "HOSTNAME" }
             if (-not $pass) { throw "Set PASS first: `$env:PASS = `"<PASS>`"" }
             # Values go in single quotes, so spaces and symbols are read as they are; a quote cannot be
-            if ("$pass$Hostname".Contains("'")) { throw "PASS and the name cannot contain '" }
+            if ("$pass$Hostname$Hide".Contains("'")) { throw "PASS and the name cannot contain '" }
 
             $envText = "PASS='$pass'`nPCSC_UPDATED=terminate`n"
             if ($Hostname) { $envText += "HOSTNAME='$Hostname'`n" }
+            # -Hide replaces the installed PCSC_HIDE ("" removes it); without it, it is kept
+            $replace = "PASS|PCSC_UPDATED|HOSTNAME"
+            if ($PSBoundParameters.ContainsKey("Hide")) {
+                $replace += "|PCSC_HIDE"
+                if ($Hide) { $envText += "PCSC_HIDE='$Hide'`n" }
+            }
             # Keep the other settings (PCSC_URI, DEV_MODE, ...)
             foreach ($line in $oldEnv) {
-                if ($line -and $line -notmatch "^(PASS|PCSC_UPDATED|HOSTNAME)=") { $envText += "$line`n" }
+                if ($line -and $line -notmatch "^($replace)=") { $envText += "$line`n" }
             }
 
             Stop-Remote

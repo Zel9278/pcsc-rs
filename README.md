@@ -52,6 +52,7 @@ $env:PASS = "npU7pmkkYfuUdKfqzm2BtDfBPEe4pizrXyPVj8Fby3KaUtehNu3ToDtM8uEdGBr3AS9
 ```
 
 - 表示する名前は `-Hostname 名前`、止めて消すときは `-Uninstall` を最後に付けます。
+- PC Status に出さない項目は `-Hide gpu_usage,temperature` のように付けます（名前は[設定](#その他の設定)の `PCSC_HIDE`）。`-Hide ""` で全部出すように戻ります。
 - もう一度実行すると、入っている `.env` の `PASS` と設定のまま最新版に入れ直します（`$env:PASS` は省略可）。
 - 確認はタスクスケジューラの「pcsc-rs」（ユーザー版は「pcsc-rs (ユーザー名)」）で。
 
@@ -89,6 +90,7 @@ curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | P
 - ユーザー版をログアウト中も動かすには `loginctl enable-linger` が必要です。
 - もう一度実行すると、入っているサービスの `PASS` のまま最新版に入れ直します（`PASS=` は省略可）。
 - `HOSTNAME` などの[設定](#その他の設定)は、サービスに `Environment="HOSTNAME=…"` を足してください（`sudo systemctl edit pcsc-rs`、ユーザー版は `systemctl --user edit pcsc-rs`）。
+- PC Status に出さない項目は、`PASS=` の後ろに `PCSC_HIDE=gpu_usage,temperature` を足して実行すれば入ります（名前は[設定](#その他の設定)の `PCSC_HIDE`）。`PCSC_HIDE=` を付けて実行すると全部出すように戻り、付けなければ前の設定のままです。
 
 <details>
 <summary>手動で入れる場合</summary>
@@ -135,6 +137,7 @@ curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/scripts/synolo
 
 - `/volume1/pcsc-rs` に置いて動かします（DSM の更新で消えないよう、データボリュームに置きます。`PCSC_DIR=` で変えられます）。ログは `/volume1/pcsc-rs/pcsc-rs.log` です
 - 落ちたとき・自動更新のあとは 5 秒後に起動し直します。以後の更新は pcsc-rs が自分で行います
+- PC Status に出さない項目は `PCSC_HIDE=gpu_usage,temperature` のように付けます（名前は[設定](#その他の設定)の `PCSC_HIDE`）
 - 表示名を変えるときは `PCSC_HOSTNAME=<名前>` を付けます（DSM のシェルは `HOSTNAME` を自分で入れるので、この名前で渡します）
 - 2回目からは `PASS=` を省けます（置き場所の `.env` を使います）。止めるときは、同じ1行に `PCSC_STOP=1` を付けて実行します
 
@@ -151,7 +154,8 @@ curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | s
 ```
 
 - 状態は `launchctl print gui/$(id -u)/io.github.zel9278.pcsc-rs`（Mac 全体なら `sudo launchctl print system/io.github.zel9278.pcsc-rs`）、ログは `~/Library/Logs/pcsc-rs.log`（Mac 全体なら `/var/log/pcsc-rs.log`）。
-- もう一度実行すると、入っている設定の `PASS` と `HOSTNAME`・`DEV_MODE`・`PCSC_URI` のまま最新版に入れ直します。
+- もう一度実行すると、入っている設定の `PASS` と `HOSTNAME`・`DEV_MODE`・`PCSC_URI`・`PCSC_HIDE` のまま最新版に入れ直します。
+- PC Status に出さない項目は、`PASS=` の後ろに `PCSC_HIDE=gpu_usage,temperature` を足して実行します（名前は[設定](#その他の設定)の `PCSC_HIDE`）。`PCSC_HIDE=` で全部出すように戻ります。
 - `HOSTNAME` などを足すときは、plist に書いてからもう一度実行します。
 
   ```sh
@@ -177,6 +181,7 @@ curl -fsSL https://raw.githubusercontent.com/Zel9278/pcsc-rs/main/install.sh | s
 - 動かし方は下の adb 版と同じで、`/data/local/tmp/pcsc-rs` に置いて端末から切り離して動かします。アプリを閉じても動き続けます。root や、root で起動した Shizuku から動かしても、クライアントとそのファイルは shell ユーザーのものになるので、あとで別の動かし方に切り替えられます
 - ワイヤレスデバッグと Shizuku のときは、開発者向けオプションの USB デバッグをオンにしておいてください。オフだと、ワイヤレスデバッグがオフになったとき（Wi-Fi が切れたときも）に adbd と一緒にクライアントも止まります
 - adb 版で入れていたときは、PASS と名前をそのまま読み込みます
+- 「PC Status に出さない項目」で選んだ項目は送りません（[設定](#その他の設定)の `PCSC_HIDE` と同じ）。変えたら「再起動」で反映されます
 - ワイヤレスデバッグは、ペアリングしたあとはアプリが自分でオンにできます（ネットワークごとに初回だけ「このネットワークで常に許可」が要ります）
 - 「スマホの再起動後に自動で開始」: root はそのまま、ワイヤレスデバッグは許可済みの Wi-Fi につながっていれば、Shizuku は Shizuku も起動時に動く（Sui や root）ときだけ効きます
 
@@ -193,6 +198,8 @@ scripts/android-adb.sh status   # 動いているか
 scripts/android-adb.sh log      # ログ
 scripts/android-adb.sh stop     # 止める
 scripts/android-adb.sh devices  # つながっている端末とシリアル
+# PC Status に出さない項目（設定の PCSC_HIDE）。PowerShell 版は -Hide gpu_usage,temperature
+PCSC_HIDE=gpu_usage,temperature scripts/android-adb.sh install
 ```
 
 Windows の PC からは PowerShell 版（[scripts/android-adb.ps1](scripts/android-adb.ps1)）を使います。
