@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.12.0](https://github.com/Zel9278/pcsc-rs/compare/v2.11.0...v2.12.0) (2026-10-14)
+
+
+### Features
+
+* use the system monitor as a library (pcsc_rs::Monitor) ([#700](https://github.com/Zel9278/pcsc-rs/issues/700)) ([6af9888](https://github.com/Zel9278/pcsc-rs/commit/6af9888687f88e9a470d1b04d5551162e9e831c4))
+
 ## [2.11.0](https://github.com/Zel9278/pcsc-rs/compare/v2.10.0...v2.11.0) (2026-10-14)
 
 
