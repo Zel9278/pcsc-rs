@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.10.0](https://github.com/Zel9278/pcsc-rs/compare/v2.9.0...v2.10.0) (2026-10-14)
+
+
+### Features
+
+* let the owner keep items off PC Status (PCSC_HIDE), also in the app ([#696](https://github.com/Zel9278/pcsc-rs/issues/696)) ([d66c96e](https://github.com/Zel9278/pcsc-rs/commit/d66c96ea9fe7ad7d7320c3ecc61534b8d9d08799))
+
 ## [2.9.0](https://github.com/Zel9278/pcsc-rs/compare/v2.8.0...v2.9.0) (2026-10-14)
 
 
