@@ -13,6 +13,8 @@ data class Settings(
     val startOnBoot: Boolean = false,
     /** Paired with wireless debugging at least once */
     val paired: Boolean = false,
+    /** Items kept off PC Status: the client's `PCSC_HIDE` names ([HIDE_ITEMS]) */
+    val hidden: Set<String> = emptySet(),
 ) {
     companion object {
         private const val FILE = "settings"
@@ -26,6 +28,7 @@ data class Settings(
                 mode = p.getString("mode", null)?.let { name -> Mode.entries.find { it.name == name } },
                 startOnBoot = p.getBoolean("startOnBoot", false),
                 paired = p.getBoolean("paired", false),
+                hidden = p.getStringSet("hidden", null).orEmpty().filter { it in HIDE_ITEMS }.toSet(),
             )
         }
     }
@@ -38,9 +41,19 @@ data class Settings(
             putString("mode", mode?.name)
             putBoolean("startOnBoot", startOnBoot)
             putBoolean("paired", paired)
+            putStringSet("hidden", hidden)
         }
     }
 }
+
+/** What the client can keep off PC Status (`PCSC_HIDE`), in the order the app lists them. */
+val HIDE_ITEMS = listOf(
+    "os", "cpu", "cpu_model", "memory", "storage", "gpu", "gpu_usage",
+    "temperature", "battery", "uptime", "loadavg", "iowait",
+)
+
+/** `PCSC_HIDE` from a set of names: comma separated, in list order. */
+fun pcscHide(hidden: Set<String>) = HIDE_ITEMS.filter { it in hidden }.joinToString(",")
 
 /** .env takes values in single quotes literally; they cannot hold a quote or a line break. */
 fun isEnvSafe(value: String) = value.none { it == '\'' || it == '\n' || it == '\r' }

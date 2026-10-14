@@ -21,10 +21,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -184,6 +186,8 @@ private fun App(shizukuChanges: MutableIntState) {
                         pass = pass,
                         hostname = env["HOSTNAME"].orEmpty().takeIf(::isEnvSafe).orEmpty(),
                         uri = env["PCSC_URI"].orEmpty().takeIf(::isEnvSafe).orEmpty(),
+                        hidden = env["PCSC_HIDE"].orEmpty().split(',', ' ').map { it.trim().lowercase() }
+                            .filter { it in HIDE_ITEMS }.toSet(),
                     ),
                 )
                 message = context.getString(R.string.imported)
@@ -374,6 +378,34 @@ private fun App(shizukuChanges: MutableIntState) {
                 }
             }
 
+            Section(stringResource(R.string.hide_title)) {
+                Text(stringResource(R.string.hide_hint), style = MaterialTheme.typography.bodySmall)
+                for (item in HIDE_ITEMS) {
+                    // All of the GPU covers its usage
+                    val coveredByGpu = item == "gpu_usage" && "gpu" in settings.hidden
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .toggleable(
+                                value = item in settings.hidden || coveredByGpu,
+                                enabled = !coveredByGpu,
+                                role = Role.Checkbox,
+                                onValueChange = { on ->
+                                    update(settings.copy(hidden = if (on) settings.hidden + item else settings.hidden - item))
+                                },
+                            ),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(checked = item in settings.hidden || coveredByGpu, enabled = !coveredByGpu, onCheckedChange = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(hideLabel(item)))
+                    }
+                }
+                if (status?.running == true) {
+                    Text(stringResource(R.string.hide_restart), style = MaterialTheme.typography.bodySmall)
+                }
+            }
+
             if (mode != null) {
                 Section(stringResource(R.string.log_title)) {
                     val log = status?.log.orEmpty()
@@ -387,6 +419,22 @@ private fun App(shizukuChanges: MutableIntState) {
             }
         }
     }
+}
+
+/** The label of a [HIDE_ITEMS] name. */
+private fun hideLabel(item: String) = when (item) {
+    "os" -> R.string.hide_os
+    "cpu" -> R.string.hide_cpu
+    "cpu_model" -> R.string.hide_cpu_model
+    "memory" -> R.string.hide_memory
+    "storage" -> R.string.hide_storage
+    "gpu" -> R.string.hide_gpu
+    "gpu_usage" -> R.string.hide_gpu_usage
+    "temperature" -> R.string.hide_temperature
+    "battery" -> R.string.hide_battery
+    "uptime" -> R.string.hide_uptime
+    "loadavg" -> R.string.hide_loadavg
+    else -> R.string.hide_iowait
 }
 
 @Composable
