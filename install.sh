@@ -6,6 +6,8 @@
 #   curl -fsSL https://raw.githubusercontent.com/SHINTRANET-Lab/pcsc-rs/main/install.sh | PASS=<PASS> sh
 #       … このユーザーだけ（~/.local/bin。Linux は systemd --user、macOS は LaunchAgent）
 # 2回目以降は PASS を省くと、既に入っている設定の PASS をそのまま使う。HOSTNAME などほかの設定も引き継ぐ
+#   … | sudo PASS=<PASS> PCSC_HIDE=gpu_usage,temperature sh
+#       … PC Status に出さない項目（README の PCSC_HIDE）。省くと前の設定のまま、PCSC_HIDE= で全部出す
 set -eu
 
 os=$(uname -s)
@@ -50,7 +52,9 @@ if [ "$os" = Darwin ]; then
   keep_env=
   if [ -f "$conf" ]; then
     [ -n "${PASS:-}" ] || PASS=$(plist_env PASS)
-    for key in HOSTNAME DEV_MODE PCSC_URI; do
+    for key in HOSTNAME DEV_MODE PCSC_URI PCSC_HIDE; do
+      # 新しく渡された PCSC_HIDE は、下で足す
+      [ "$key" = PCSC_HIDE ] && [ -n "${PCSC_HIDE+set}" ] && continue
       value=$(plist_env "$key")
       [ -n "$value" ] && keep_env="$keep_env$key=$value
 "
@@ -73,6 +77,10 @@ else
         sed -e 's/%%/%/g' -e 's/\\"/"/g' -e 's/\\\\/\\/g')
     fi
     keep=$(grep -E '^Environment=' "$conf" | grep -vE '^Environment="?(PASS|PCSC_UPDATED)=' || true)
+    # 新しく渡された PCSC_HIDE は、下で入れ直す
+    if [ -n "${PCSC_HIDE+set}" ]; then
+      keep=$(printf '%s\n' "$keep" | grep -vE '^Environment="?PCSC_HIDE=' || true)
+    fi
   fi
 fi
 
@@ -100,6 +108,17 @@ chmod 755 "$bin.new"
 mv -f "$bin.new" "$bin"
 
 # ---- 登録して起動 ----
+
+# 渡された PCSC_HIDE（空なら何も隠さない）
+if [ -n "${PCSC_HIDE:-}" ]; then
+  if [ "$os" = Darwin ]; then
+    keep_env="${keep_env}PCSC_HIDE=$PCSC_HIDE
+"
+  else
+    keep="${keep:+$keep
+}Environment=\"PCSC_HIDE=$PCSC_HIDE\""
+  fi
+fi
 
 if [ "$os" = Darwin ]; then
   xml() { printf %s "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
