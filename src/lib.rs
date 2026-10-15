@@ -25,6 +25,7 @@ mod cmd;
 mod config;
 mod cpuinfo;
 mod gpu;
+mod hide;
 mod io;
 #[cfg(all(target_os = "linux", target_arch = "arm", target_env = "musl"))]
 mod legacy_dns;
@@ -32,7 +33,6 @@ mod monitor;
 mod status;
 mod thermal;
 mod update;
-
 pub use config::Config;
 
 // Rustls replaces native-tls for both targets that cannot use the system OpenSSL.
@@ -67,9 +67,24 @@ pub fn start(config: &Config) -> ! {
     let hostname = config.hostname.clone();
     #[cfg(any(target_os = "linux", target_os = "android"))]
     let hostname = hostname.filter(|h| !android::is_shell_hostname(h));
+    if !config.unknown_hidden.is_empty() {
+        let items: Vec<&str> = hide::ITEMS.iter().map(|(item, _)| *item).collect();
+        elog!(
+            "PCSC_HIDE: unknown {} (one of: {})",
+            config.unknown_hidden.join(", "),
+            items.join(", ")
+        );
+    }
+    if !config.hidden.is_empty() {
+        log!(
+            "Not sent to PC Status: {}",
+            config.hidden.names().join(", ")
+        );
+    }
     let status = monitor::spawn(status::Identity {
         hostname,
         dev: config.dev,
+        hidden: config.hidden.clone(),
     });
 
     log!("This OS is supported!");

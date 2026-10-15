@@ -127,8 +127,7 @@ fn core_name(implementer: u32, part: u32) -> Option<&'static str> {
         (0x41, 0xd85) => "Cortex-X925",
         (0x41, 0xd87) => "Cortex-A725",
         // Qualcomm
-        (0x51, 0x00f) => "Scorpion",
-        (0x51, 0x02d) => "Scorpion",
+        (0x51, 0x00f | 0x02d) => "Scorpion",
         (0x51, 0x04d | 0x06f) => "Krait",
         (0x51, 0x201 | 0x205 | 0x211) => "Kryo",
         (0x51, 0x800) => "Kryo 260 Gold (Cortex-A73)",
@@ -218,12 +217,11 @@ fn fill_offline(mut cores: Vec<CoreInfo>, possible: usize) -> Vec<CoreInfo> {
 fn parse_range_count(text: &str) -> Option<usize> {
     let mut total = 0;
     for part in text.trim().split(',') {
-        let (a, b) = match part.split_once('-') {
-            Some((a, b)) => (a.parse::<usize>().ok()?, b.parse::<usize>().ok()?),
-            None => {
-                let n = part.parse::<usize>().ok()?;
-                (n, n)
-            }
+        let (a, b) = if let Some((a, b)) = part.split_once('-') {
+            (a.parse::<usize>().ok()?, b.parse::<usize>().ok()?)
+        } else {
+            let n = part.parse::<usize>().ok()?;
+            (n, n)
         };
         total += b.checked_sub(a)? + 1;
     }
@@ -721,7 +719,7 @@ mod tests {
         assert!(!is_mixed(&kinds));
         // no CPU part (x86): nothing is known
         let x86 = parse_cpuinfo("processor : 0\nmodel name : Intel(R) Core(TM) i7\n");
-        assert!(kinds_of(&x86, &BTreeMap::new(), None).is_empty());
+        assert_eq!(kinds_of(&x86, &BTreeMap::new(), None), []);
     }
 
     #[test]

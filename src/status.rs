@@ -5,12 +5,13 @@
 use cfg_if::cfg_if;
 use serde::Serialize;
 use std::time::Duration;
-
 use sysinfo::{Disks, System};
 
 use crate::{
     battery::{self, BatteryData},
-    gpu, io,
+    gpu,
+    hide::Hidden,
+    io,
     monitor::Sampler,
     thermal::{self, Temperature},
 };
@@ -21,7 +22,8 @@ pub struct CoreData {
     pub(crate) usage: f32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) model: Option<String>,
-    /// Top frequency of the core's cpufreq policy, sent with `model` where known
+    /// Top frequency of the core in MHz (cpufreq policy on Linux and Android, the rated
+    /// figure on Windows), sent where known
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) max_mhz: Option<u32>,
 }
@@ -68,6 +70,10 @@ pub struct GpuData {
     /// °C (NVIDIA only)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) temperature: Option<f64>,
+    /// Whether `usage` was actually read. A GPU whose usage cannot be read is not sent
+    /// as 0%: when none can be read, `gpu_usage` is hidden (see `SystemStatus::hide`).
+    #[serde(skip)]
+    pub usage_known: bool,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -94,6 +100,10 @@ pub struct SystemStatus {
     /// Empty where no sensor is readable (Windows without administrator rights, most VMs).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub(crate) temperatures: Vec<Temperature>,
+    /// Items kept off PC Status (`PCSC_HIDE`, and `gpu_usage` when no GPU's usage can be
+    /// read): left out or zero above.
+    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+    pub(crate) hidden: Vec<&'static str>,
     /// Kept by the server; sent for compatibility with the monorepo server.
     pub(crate) index: u32,
     /// Kept by the server; sent for compatibility with the monorepo server.
@@ -105,6 +115,7 @@ pub struct SystemStatus {
 pub struct Identity {
     pub hostname: Option<String>,
     pub dev: bool,
+    pub hidden: Hidden,
 }
 
 /// Version shown for this client in PC Status.
@@ -150,7 +161,7 @@ impl SystemStatus {
 
         let (battery, temperatures) = sensors(thermal);
 
-        Self {
+        let status = Self {
             dev: identity.dev,
             _os: format!("{os_name} {os_version}").trim_end().to_owned(),
             hostname,
@@ -168,12 +179,67 @@ impl SystemStatus {
             uptime: System::uptime(),
             loadavg,
             iowait: io.iowait(),
-            gpus: gpu::get_info(),
+            // Not even asked for when hidden (nvidia-smi is a process each time)
+            gpus: if identity.hidden.has("gpu") {
+                Vec::new()
+            } else {
+                gpu::get_info()
+            },
             battery,
             temperatures,
+            hidden: Vec::new(),
             index: 0,
             histories: [],
+        };
+        status.hide(&identity.hidden)
+    }
+
+    /// Takes out what the owner keeps off PC Status. Fields the wire format requires
+    /// become zero or empty; the `hidden` list tells the server which.
+    /// `gpu_usage` is added by itself when no GPU's usage can be read.
+    // `_os` is the wire format's name for the OS
+    #[allow(clippy::used_underscore_binding)]
+    fn hide(mut self, hidden: &Hidden) -> Self {
+        let hidden = if !self.gpus.is_empty() && self.gpus.iter().all(|g| !g.usage_known) {
+            hidden.clone().with("gpu_usage")
+        } else {
+            hidden.clone()
+        };
+        let zero = || MemoryData { free: 0, total: 0 };
+        for &item in hidden.names() {
+            match item {
+                "os" => self._os.clear(),
+                "cpu" => self.cpu.cpus.iter_mut().for_each(|c| c.usage = 0.0),
+                "cpu_name" => {
+                    self.cpu.model.clear();
+                    self.cpu.cpus.iter_mut().for_each(|c| c.model = None);
+                }
+                "cpu_frequency" => self.cpu.cpus.iter_mut().for_each(|c| c.max_mhz = None),
+                "memory" => (self.ram, self.swap) = (zero(), zero()),
+                "storage" => self.storages.clear(),
+                "gpu" => self.gpus.clear(),
+                "gpu_name" => self.gpus.iter_mut().for_each(|g| g.name.clear()),
+                "gpu_usage" => self.gpus.iter_mut().for_each(|g| g.usage = 0.0),
+                "gpu_memory" => self
+                    .gpus
+                    .iter_mut()
+                    .for_each(|g| g.memory = GpuMemory { free: 0, total: 0 }),
+                "temperature" => {
+                    self.temperatures.clear();
+                    self.gpus.iter_mut().for_each(|g| g.temperature = None);
+                    if let Some(battery) = &mut self.battery {
+                        battery.temperature = None;
+                    }
+                }
+                "battery" => self.battery = None,
+                "uptime" => self.uptime = 0,
+                "loadavg" => self.loadavg = [0.0; 3],
+                "iowait" => self.iowait = None,
+                _ => {}
+            }
         }
+        self.hidden = hidden.names().to_vec();
+        self
     }
 }
 
@@ -465,6 +531,7 @@ pub(crate) fn sample() -> SystemStatus {
             usage: 7.0,
             memory: GpuMemory { free: 5, total: 6 },
             temperature: Some(55.0),
+            usage_known: true,
         }],
         battery: Some(BatteryData {
             level: 80.0,
@@ -476,6 +543,7 @@ pub(crate) fn sample() -> SystemStatus {
             label: "coretemp Package id 0".into(),
             value: 61.5,
         }],
+        hidden: Vec::new(),
         index: 0,
         histories: [],
     }
@@ -514,6 +582,42 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::used_underscore_binding)]
+    fn hides_items() {
+        let (hidden, _) = crate::hide::Hidden::parse("gpu_usage memory os gpu_name");
+        let status = super::sample().hide(&hidden);
+        assert_eq!(status.hidden, ["gpu_name", "gpu_usage", "memory", "os"]);
+        assert!(status.gpus.iter().all(|g| g.name.is_empty()));
+        assert_eq!(status._os, "");
+        assert_eq!((status.ram.total, status.swap.total), (0, 0));
+        assert!(status.gpus.iter().all(|g| g.usage == 0.0));
+        // Not hidden: left as it was
+        assert_eq!(status.cpu.cpus[0].usage, super::sample().cpu.cpus[0].usage);
+        // Nothing hidden: no list on the wire
+        let json =
+            serde_json::to_value(super::sample().hide(&crate::hide::Hidden::default())).unwrap();
+        assert!(json.get("hidden").is_none());
+    }
+
+    #[test]
+    fn hides_gpu_usage_that_cannot_be_read() {
+        // None readable: hidden by itself
+        let mut unreadable = super::sample();
+        unreadable
+            .gpus
+            .iter_mut()
+            .for_each(|g| g.usage_known = false);
+        let status = unreadable.hide(&crate::hide::Hidden::default());
+        assert_eq!(status.hidden, ["gpu_usage"]);
+        assert!(status.gpus.iter().all(|g| g.usage == 0.0));
+
+        // Readable: left alone
+        let status = super::sample().hide(&crate::hide::Hidden::default());
+        assert_eq!(status.hidden, [] as [&str; 0]);
+        assert_eq!(status.gpus[0].usage, 7.0);
+    }
+
+    #[test]
     fn wire_format() {
         assert_eq!(
             serde_json::to_value(super::sample()).unwrap(),
@@ -522,7 +626,7 @@ mod tests {
                 "_os": "Arch Linux rolling",
                 "hostname": "host",
                 "version": "Rust client test",
-                                "cpu": { "model": "cpu", "cpus": [{ "cpu": 12.5 }, { "cpu": 50.0, "model": "Cortex-X4", "max_mhz": 2803 }] },
+                "cpu": { "model": "cpu", "cpus": [{ "cpu": 12.5 }, { "cpu": 50.0, "model": "Cortex-X4", "max_mhz": 2803 }] },
                 "ram": { "free": 1, "total": 2 },
                 "swap": { "free": 0, "total": 0 },
                 "storages": [{ "name": "/dev/sda1", "free": 3, "total": 4, "read": 1024, "written": 2048, "busy": 12.5 }],

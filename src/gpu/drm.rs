@@ -112,6 +112,8 @@ impl Card {
             } else {
                 temperature(&self.device)
             },
+            // BMC の VGA (Matrox / ASPEED) には使用率の仕組みがない
+            usage_known: !matches!(self.driver.as_str(), "mgag200" | "ast"),
         }
     }
 }

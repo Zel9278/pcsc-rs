@@ -54,6 +54,7 @@ pub fn get_info() -> Vec<GpuData> {
                 usage,
                 memory,
                 temperature: None,
+                usage_known: true,
             }
         })
         .collect()

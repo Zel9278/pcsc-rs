@@ -142,13 +142,14 @@ fn parse_line(line: &str) -> Option<GpuData> {
     let total = fields.next()?.parse().ok()?;
     let free = fields.next()?.parse().ok()?;
     // "[N/A]" on some GPUs; reported as 0 (the wire format has no "unknown")
-    let usage = fields.next()?.parse().unwrap_or(0.0);
+    let usage: Option<f64> = fields.next()?.parse().ok();
     let name = fields.next()?.to_owned();
     Some(GpuData {
         name,
-        usage,
+        usage: usage.unwrap_or(0.0),
         memory: GpuMemory { free, total },
         temperature,
+        usage_known: usage.is_some(),
     })
 }
 
@@ -177,14 +178,18 @@ mod mobile {
     const MEMORY_INTERVAL: Duration = Duration::from_secs(5);
 
     pub fn get_info() -> Option<GpuData> {
-        let (name, usage) = adreno()
+        let (name, usage, usage_known) = adreno()
             .or_else(samsung)
             .or_else(mediatek_mali)
             .or_else(generic_mali)
             .or_else(powervr)
             .or_else(tegra)
-            .or_else(raspberry_pi)
-            .or_else(name_only)?;
+            .map(|(name, usage)| (name, usage, true))
+            .or_else(|| {
+                raspberry_pi()
+                    .or_else(name_only)
+                    .map(|(name, usage)| (name, usage, false))
+            })?;
         // 汎用名（"Arm Mali" など）しか分からないときは、GLES の名前に置き換える
         let name = if matches!(
             name.as_str(),
@@ -200,6 +205,7 @@ mod mobile {
             memory: shared_memory().unwrap_or(GpuMemory { free: 0, total: 0 }),
             // In the thermal zones (the "GPU" temperature)
             temperature: None,
+            usage_known,
         })
     }
 
@@ -429,6 +435,7 @@ mod tests {
                     total: 4096
                 },
                 temperature: Some(45.0),
+                usage_known: true,
             }]
         );
     }
@@ -447,6 +454,7 @@ mod tests {
         assert!(gpus[0].usage.abs() < f64::EPSILON);
         assert_eq!(gpus[0].memory.total, 11441);
         assert_eq!(gpus[0].temperature, None);
+        assert!(!gpus[0].usage_known);
     }
 
     #[test]

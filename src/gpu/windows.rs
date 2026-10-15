@@ -82,6 +82,7 @@ pub fn get_info(skip_nvidia: bool) -> Vec<GpuData> {
                 usage,
                 memory,
                 temperature: None,
+                usage_known: true,
             }
         })
         .collect()
